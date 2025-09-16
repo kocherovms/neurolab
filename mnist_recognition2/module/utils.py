@@ -33,16 +33,17 @@ class Config:
         transfs_db_file_name='transfs.db',
     )
     
-    def __init__(self, section_name='DEFAULT'):
+    def __init__(self, section_name='DEFAULT', config_fname='config.txt'):
         super()
         self.section_name = section_name
+        self.config_fname = config_fname
         self.reload()
 
     def reload(self):
         config = configparser.ConfigParser(defaults=type(self).DEFAULTS)
 
-        if os.path.exists('config.txt'):
-            config.read('config.txt')
+        if os.path.exists(self.config_fname):
+            config.read(self.config_fname)
 
         sections = [config['DEFAULT']]
 
@@ -164,7 +165,8 @@ class DBUtils:
 
     @staticmethod
     def get_full_db_file_name(config, db_file_name, with_prefix=True):
-        return os.path.join(config.dataset_path, ('', config.db_file_name_prefix)[with_prefix] + db_file_name)
+        base_path = os.path.dirname(os.path.abspath(config.config_fname))
+        return os.path.join(os.path.join(base_path, config.dataset_path), ('', config.db_file_name_prefix)[with_prefix] + db_file_name)
 
     @staticmethod
     def get_column_names(db_con, table_name):
