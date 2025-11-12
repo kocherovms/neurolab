@@ -93,13 +93,14 @@ def queryY(mem, P, x, z):
 @numba.jit(nopython=True)
 def sums2sdr(sums, P):
     # this does what binarize() does in C
+    # binarize in C = "convert an array of non-negative integers v to an SDR x with target sparse population pop. this is used by dyadic/triadic memory query functions"
     ssums = sums.copy()
     ssums.sort()
     threshval = ssums[-P]
     if threshval == 0:
-        return np.where(sums)[0]  # All non zero values
+        return np.where(sums)[0]  # All non zero values, aka np.flatnonzero(sums != 0)
     else:
-        return np.where(sums >= threshval)[0] # 
+        return np.where(sums >= threshval)[0] # aka np.flatnonzero(sums >= threshval)
 
 class TriadicMemory:
     def __init__(self, N, P):
