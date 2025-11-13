@@ -19,6 +19,8 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMA
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+from collections import defaultdict
+
 import numpy as np
 import numba
 
@@ -106,9 +108,17 @@ class TriadicMemory:
     def __init__(self, N, P):
         self.mem = np.zeros((N,N,N), dtype=np.uint8)
         self.P = P
+        self.stores = 0
+        self.unique_x = defaultdict(int)
+        self.unique_y = defaultdict(int)
+        self.unique_z = defaultdict(int)
 
     def store(self, x, y, z):
         store_xyz(self.mem, x, y, z)
+        self.stores += 1
+        self.unique_x[tuple(map(int, x))] += 1
+        self.unique_y[tuple(map(int, y))] += 1
+        self.unique_z[tuple(map(int, z))] += 1
 
     def query(self, x, y, z = None): 
         # query for either x, y or z. 
