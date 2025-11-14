@@ -41,7 +41,8 @@ def store_xy(mem, N, x, y):
     """ 
     for addr in xaddr(x, N):
         for j in y:
-            mem[addr,j] = 1
+            # mem[addr,j] = 1
+            mem[addr,j] += 1
 
 @numba.jit(nopython=True)
 def store_xyz(mem, x, y, z): 
@@ -52,7 +53,8 @@ def store_xyz(mem, x, y, z):
     for ax in x:
         for ay in y:
             for az in z:
-                mem[ax, ay, az] = 1
+                mem[ax, ay, az] += 1
+                # mem[ax, ay, az] = 1
 
     
 @numba.jit(nopython=True)
