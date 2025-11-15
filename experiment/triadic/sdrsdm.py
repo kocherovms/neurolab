@@ -20,6 +20,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 from collections import defaultdict
+from enum import Enum, auto
 
 import numpy as np
 import numba
@@ -41,11 +42,21 @@ def store_xy(mem, N, x, y):
     """ 
     for addr in xaddr(x, N):
         for j in y:
-            # mem[addr,j] = 1
-            mem[addr,j] += 1
+            mem[addr,j] = 1
 
 @numba.jit(nopython=True)
-def store_xyz(mem, x, y, z): 
+def store_xyz_set_one(mem, x, y, z): 
+    """
+    Stores X, Y, Z triplet in mem
+    All X, Y, Z have to be sparse encoded SDRs
+    """
+    for ax in x:
+        for ay in y:
+            for az in z:
+                mem[ax, ay, az] = 1
+
+@numba.jit(nopython=True)
+def store_xyz_inc(mem, x, y, z): 
     """
     Stores X, Y, Z triplet in mem
     All X, Y, Z have to be sparse encoded SDRs
@@ -54,8 +65,6 @@ def store_xyz(mem, x, y, z):
         for ay in y:
             for az in z:
                 mem[ax, ay, az] += 1
-                # mem[ax, ay, az] = 1
-
     
 @numba.jit(nopython=True)
 def query(mem, N, P, x):
@@ -106,17 +115,31 @@ def sums2sdr(sums, P):
     else:
         return np.where(sums >= threshval)[0] # aka np.flatnonzero(sums >= threshval)
 
+class StoreMethod(Enum):
+    SET_ONE = auto()
+    INC = auto()
+
 class TriadicMemory:
-    def __init__(self, N, P):
+    def __init__(self, N, P, store_method):
         self.mem = np.zeros((N,N,N), dtype=np.uint8)
         self.P = P
+
+        match store_method:
+            case StoreMethod.SET_ONE:
+                self.store_method = store_xyz_set_one
+            case StoreMethod.INC:
+                self.store_method = store_xyz_inc
+            case _:
+                self.store_method = None
+                assert False, f'Unknown store method {store_method}'
+        
         self.stores = 0
         self.unique_x = defaultdict(int)
         self.unique_y = defaultdict(int)
         self.unique_z = defaultdict(int)
 
     def store(self, x, y, z):
-        store_xyz(self.mem, x, y, z)
+        self.store_method(self.mem, x, y, z)
         self.stores += 1
         self.unique_x[tuple(map(int, x))] += 1
         self.unique_y[tuple(map(int, y))] += 1
