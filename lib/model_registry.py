@@ -88,7 +88,7 @@ class ModelRegistry:
             assets = list(filter(lambda a: a['maven2']['extension'] == form_data['maven2.asset1.extension'], self.get_assets(model_name, model_version)))
 
             if assets:
-                print(f'Found existing .{form_data['maven2.asset1.extension']} asset (id={assets[0]['id']}) for {self.maven_group_id}.{model_name}.{model_version}, replacing')
+                print(f'Found existing .{form_data['maven2.asset1.extension']} asset (id={assets[0]['id']}) for {self.maven_group_id}.{model_name},version={model_version}, replacing')
                 r = requests.delete(f'{self.nexus_url}/service/rest/v1/assets/{assets[0]['id']}', auth=self.nexus_auth)
                 r.raise_for_status()
                 self.attach_asset(model_name, model_version, model_asset, model_asset_ext, replace=False)
@@ -113,3 +113,16 @@ class ModelRegistry:
             return []
 
         return items[0]['assets']
+
+    def get_asset_content(self, model_name, model_version, asset_ext):
+        assets = self.get_assets(model_name, model_version)
+        assets = list(filter(lambda a: a['maven2']['extension'] == asset_ext, assets))
+
+        if not assets:
+            raise Exception(f'Failed to locate asset "{asset_ext}" for {self.maven_group_id}.{model_name},version={model_version}')
+
+        print(f'Downloading {assets[0]['downloadUrl']} for asset with id={assets[0]['id']}')
+        r = requests.get(assets[0]['downloadUrl'])
+        r.raise_for_status()
+        return r.content       
+        
