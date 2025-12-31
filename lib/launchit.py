@@ -114,11 +114,13 @@ def launchit(fname, expandvars={}):
                         assert ege.source_line_ind + 1 < stop_source_line_ind
                         print(f'Cell {ege.cell_ind}, disabling source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}')
     
-                        for source_line_ind in range(ege.source_line_ind + 1, len(cell['source'])):
+                        for source_line_ind in range(ege.source_line_ind + 1, stop_source_line_ind):
                             cell['source'][source_line_ind] = disable_source_line(cell['source'][source_line_ind])
                 case _:
                     assert False, f'Failed to understand exec_graph_entry={ege}'
 
+        expandvars['LAUNCHIT_FNAME'] = new_fname
+        
         for cell in nb['cells']:
             for source_line_ind, source_line in enumerate(cell['source']):
                 t = string.Template(source_line)

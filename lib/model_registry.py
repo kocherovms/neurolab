@@ -26,7 +26,7 @@ class ModelRegistry:
         else:
             top_version = int(items[0]['version'])
             version = top_version + 1
-            print(f'Top version of {self.maven_group_id}.{model_name} is {top_version}, continuing series with version={version}')
+            print(f'Latest version of {self.maven_group_id}.{model_name} is {top_version}, continuing series with version={version}')
         
         query_params = {
             'repository': self.maven_repo,
