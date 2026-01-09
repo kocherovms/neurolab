@@ -1,0 +1,2 @@
+https://yann.lecun.com/exdb/mnist/
+https://www.kaggle.com/datasets/hojjatk/mnist-dataset?resource=download-directory&select=train-images-idx3-ubyte
