@@ -12,9 +12,10 @@ import matplotlib.backends.backend_agg as plt_backend_agg
 
 RMQ_EVENTS_EXCHANGE_NAME = 'events'
 RMQ_EVENTS_QUEUE_NAME = 'events'
+RMQ_DEFAULT_CONNECTION_URL = 'amqp://guest:guest@rabbitmq:5672/%2F'
 
 class RmqSummaryBase:
-    def __init__(self, rmq_connection_url):
+    def __init__(self, rmq_connection_url=RMQ_DEFAULT_CONNECTION_URL):
         connection_parameters = pika.URLParameters(rmq_connection_url)
         self.connection = pika.BlockingConnection(connection_parameters)
         self.channel = self.connection.channel()
@@ -34,15 +35,11 @@ class RmqSummaryBase:
         )
 
 class RmqSummaryWriter(RmqSummaryBase):
-    def __init__(self, log_dir, rmq_connection_url):
+    def __init__(self, log_dir, rmq_connection_url=RMQ_DEFAULT_CONNECTION_URL):
         super().__init__(rmq_connection_url)
         self.log_dir = log_dir
-        self.is_active = False
 
     def add_scalar(self, tag, scalar_value, global_step):
-        if not self.is_active:
-            return
-            
         properties = self._create_message_properties('add_scalar')
         properties.headers['tag'] = tag
         properties.headers['global_step'] = str(global_step)
@@ -56,9 +53,6 @@ class RmqSummaryWriter(RmqSummaryBase):
                 properties=properties)
 
     def add_text(self, tag, text_string, global_step):
-        if not self.is_active:
-            return
-            
         properties = self._create_message_properties('add_text')
         properties.headers['tag'] = tag
         properties.headers['global_step'] = str(global_step)
@@ -70,9 +64,6 @@ class RmqSummaryWriter(RmqSummaryBase):
             properties=properties)
         
     def add_figure(self, tag, figure, global_step, close):
-        if not self.is_active:
-            return
-            
         properties = self._create_message_properties('add_figure')
         properties.headers['tag'] = tag
         properties.headers['global_step'] = str(global_step)
@@ -87,9 +78,6 @@ class RmqSummaryWriter(RmqSummaryBase):
                 properties=properties)
 
     def add_hparams(self, hparam_dict, metric_dict, run_name):
-        if not self.is_active:
-            return
-            
         properties = self._create_message_properties('add_hparams')
         properties.headers['run_name'] = run_name
 
@@ -103,9 +91,6 @@ class RmqSummaryWriter(RmqSummaryBase):
             properties=properties)
 
     def flush(self):
-        if not self.is_active:
-            return
-            
         properties = self._create_message_properties('flush')
 
         self.channel.basic_publish(
