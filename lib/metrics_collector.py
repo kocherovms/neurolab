@@ -176,8 +176,8 @@ class RmqSummaryCollector(RmqSummaryBase):
     @lru_cache(maxsize=100)
     def get_summary_writer(self, log_dir):
         from torch.utils.tensorboard import SummaryWriter
-        log_dir = os.path.join(self.base_log_dir, log_dir)
-        print(f'Creating SummaryWriter for log_dir={log_dir}')
+        log_dir = os.path.join(self.base_log_dir, log_dir.lstrip('/'))
+        print(f'Creating SummaryWriter for log_dir={log_dir} (base_log_dir={self.base_log_dir})')
         return SummaryWriter(log_dir=log_dir)
 
 if __name__ == "__main__":
