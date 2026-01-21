@@ -13,14 +13,15 @@ class Command(IntEnum):
 
 ExecGraphEntry = namedtuple('ExecGraphEntry', 'command cell_ind source_line_ind is_oneliner stop_source_line_ind')
 
-def launchit(fname, expandvars={}):
+def launchit(fname, launch_serial=0, expandvars={}):
     fname_dir = os.path.dirname(fname)
     fname_name = os.path.splitext(os.path.basename(fname))[0]
     fname_ext = os.path.splitext(fname)[1]
     
     new_fname = ''
-    
-    for i in range(1, 100 + 1):
+    serials_range = range(1, 1_000 + 1) if launch_serial == 0 else [launch_serial]
+
+    for i in serials_range:
         new_fname = os.path.join(fname_dir, f'{fname_name}-launch{i}{fname_ext}')
     
         if not os.path.exists(new_fname):
