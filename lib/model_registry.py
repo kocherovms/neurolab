@@ -71,7 +71,7 @@ class ModelRegistry:
                 
             return version
 
-    def attach_asset(self, model_name, model_version, model_asset, model_asset_ext='', replace=False):
+    def attach_asset(self, model_name, model_version, model_asset, model_asset_classifier='', model_asset_ext='', replace=False):
         query_params = {
             'repository': self.maven_repo,
         }
@@ -81,6 +81,10 @@ class ModelRegistry:
             'maven2.artifactId': model_name,
             'version': model_version,
         }
+
+        if model_asset_classifier:
+            form_data['maven2.asset1.classifier'] = model_asset_classifier
+        
         files = {}
         do_post = lambda: requests.post(f'{self.nexus_url}/service/rest/v1/components', auth=self.nexus_auth, params=query_params, data=form_data, files=files)
         
