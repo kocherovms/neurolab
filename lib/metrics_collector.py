@@ -119,7 +119,7 @@ class RmqSummaryWriter(RmqSummaryBase):
                 'log_dir': self.log_dir,
                 'method': method,
             },
-            delivery_mode = pika.DeliveryMode.Persistent,
+            delivery_mode=pika.DeliveryMode.Persistent,
         )
 
 class RmqSummaryCollector(RmqSummaryBase):

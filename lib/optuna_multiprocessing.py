@@ -7,15 +7,9 @@ import optuna
 from optuna.storages import JournalStorage
 from optuna.storages.journal import JournalFileBackend
 
+from lib.logging_utils import if_verbose
 import lib.model_registry
 import lib.launchit
-
-def if_verbose(verbosity, verbosity_threshold, func):
-    if verbosity < verbosity_threshold:
-        return
-
-    func()
-    sys.stdout.flush()
 
 def importstr(module_str, from_=None):
     """

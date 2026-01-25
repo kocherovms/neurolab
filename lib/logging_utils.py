@@ -1,7 +1,15 @@
 import os
+import sys
 import time
 import logging
 import logging.handlers
+
+def if_verbose(verbosity, verbosity_threshold, func):
+    if verbosity < verbosity_threshold:
+        return
+
+    func()
+    sys.stdout.flush()
 
 class Logging(object):
     def __init__(self):
