@@ -12,7 +12,7 @@ class ModelRegistry:
         self.maven_repo = maven_repo
             
     def register_model(self, model_name, retries_count=3):
-        for retry_no in range(retries_count):
+        for retry_no in range(retries_count + 1):
             query_params = {
                 'group': self.maven_group_id, 
                 'name': model_name,
@@ -63,11 +63,13 @@ class ModelRegistry:
                 form_data['maven2.asset1.extension'] = 'pom'
                 r = requests.post(f'{self.nexus_url}/service/rest/v1/components', auth=self.nexus_auth, params=query_params, data=form_data, files=files)
 
-                if r.status_code == 400:
+                if r.status_code == 400 and retry_no < retries_count:
                     # possible race condition
                     print(f'Got Bad Requets status (race condition?), retrying in {retry_no+1} seconds')
                     time.sleep(retry_no + 1)
                     continue
+                else:
+                    r.raise_for_status()
                 
             return version
 

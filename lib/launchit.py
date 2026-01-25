@@ -8,6 +8,9 @@ from enum import IntEnum, auto
 
 class Command(IntEnum):
     COLLECT = auto()
+    COLLECT_1 = auto()
+    COLLECT_2 = auto()
+    COLLECT_3 = auto()
     COLLECTED = auto()
     DISABLE = auto()    
 
@@ -18,8 +21,8 @@ def if_verbose(verbosity, verbosity_threshold, func):
         return
 
     func()
-
-def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', verbosity=3, max_serials_count=1_000):
+    
+def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', verbosity=3, max_serials_count=1_000, collect_inds=None):
     fname_dir = os.path.dirname(fname) if not dir_name else dir_name
     fname_name = os.path.splitext(os.path.basename(fname))[0]
     fname_ext = os.path.splitext(fname)[1] if not make_py_file else '.py'
@@ -58,6 +61,12 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                             ege = ege._replace(command=Command.DISABLE)
                         case 'collect':
                             ege = ege._replace(command=Command.COLLECT)
+                        case 'collect_1':
+                            ege = ege._replace(command=Command.COLLECT_1)
+                        case 'collect_2':
+                            ege = ege._replace(command=Command.COLLECT_2)
+                        case 'collect_3':
+                            ege = ege._replace(command=Command.COLLECT_3)
                         case 'collected':
                             assert not ege.is_oneliner, '@launchit.collected cannot be oneliner'
                             ege = ege._replace(command=Command.COLLECTED)
@@ -84,21 +93,37 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
             stop_source_line_ind = len(cell['source']) if ege.stop_source_line_ind == -1 else ege.stop_source_line_ind
             
             match ege.command:
-                case Command.COLLECT:
-                    if ege.is_oneliner:
-                        if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, collecting source line {ege.source_line_ind}'))
-                        source_line = cell['source'][ege.source_line_ind]
-                        collected_source_lines.append(source_line)
+                case Command.COLLECT | Command.COLLECT_1 | Command.COLLECT_2 | Command.COLLECT_3:
+                    do_collect = collect_inds is None
+
+                    if not do_collect:
+                        do_collect = ege.command == Command.COLLECT
+
+                    if not do_collect:
+                        collect_ind = {Command.COLLECT_1: 1, Command.COLLECT_2: 2, Command.COLLECT_3: 3}[ege.command]
+                        do_collect = collect_ind in collect_inds
+
+                    if not do_collect:
+                        if ege.is_oneliner:
+                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, skip collecting source line {ege.source_line_ind}'))
+                        else:
+                            assert ege.source_line_ind + 1 < stop_source_line_ind
+                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, skip collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}'))
                     else:
-                        assert ege.source_line_ind + 1 < stop_source_line_ind
-                        if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}'))
-    
-                        if collected_source_lines:
-                            collected_source_lines.append('\n')
-        
-                        for source_line_ind in range(ege.source_line_ind + 1, stop_source_line_ind):
-                            source_line = cell['source'][source_line_ind]
+                        if ege.is_oneliner:
+                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, collecting source line {ege.source_line_ind}'))
+                            source_line = cell['source'][ege.source_line_ind]
                             collected_source_lines.append(source_line)
+                        else:
+                            assert ege.source_line_ind + 1 < stop_source_line_ind
+                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}'))
+        
+                            if collected_source_lines:
+                                collected_source_lines.append('\n')
+            
+                            for source_line_ind in range(ege.source_line_ind + 1, stop_source_line_ind):
+                                source_line = cell['source'][source_line_ind]
+                                collected_source_lines.append(source_line)
                 case Command.COLLECTED:
                     if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, putting {len(collected_source_lines)} collected source lines to {ege.source_line_ind}'))
     
@@ -142,5 +167,4 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
         else:
             json.dump(nb, f, indent=2) # .ipynb
     
-    if_verbose(verbosity, 1, lambda: print(f'Created "{new_fname}"'))
     return new_fname
