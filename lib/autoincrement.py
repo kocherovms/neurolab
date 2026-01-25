@@ -22,8 +22,10 @@ class Autoincrement:
             on_message_callback=self.on_reply, 
             auto_ack=True)
         self.verbosity = verbosity
+        self.result = None
 
     def __call__(self, key):
+        self.result = None
         properties = pika.spec.BasicProperties(
             reply_to=RMQ_MAGIC_REPLY_QUEUE_NAME, 
             delivery_mode=pika.DeliveryMode.Persistent
@@ -34,11 +36,21 @@ class Autoincrement:
             body=key.encode(),
             properties=properties)
         self.channel.start_consuming()
+        
+        result = self.result
+        self.result = None
+        return result
 
     def on_reply(self, ch, method, properties, body):
         if_verbose(self.verbosity, 3, lambda: print(f'on_reply: {method=}, {properties=}, len(body)={len(body)}'))
         if_verbose(self.verbosity, 1, lambda: print(f'Generated autoincrement={body.decode()}'))
+        self.result = body.decode()
         self.channel.close()
+
+    @staticmethod
+    def get(key, rmq_connection_url=RMQ_DEFAULT_CONNECTION_URL, verbosity=0):
+        client = Autoincrement(rmq_connection_url, verbosity=verbosity)
+        return client(key)
 
 class AutoincrementServer:
     def __init__(self, storage_fname, rmq_connection_url, verbosity=0):
@@ -98,6 +110,7 @@ class AutoincrementServer:
             routing_key=reply_to, 
             body=str(self.autoincs[key]).encode(),
             properties=properties)
+        
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
 

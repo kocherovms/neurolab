@@ -7,9 +7,10 @@ import optuna
 from optuna.storages import JournalStorage
 from optuna.storages.journal import JournalFileBackend
 
-from lib.logging_utils import if_verbose
-import lib.model_registry
-import lib.launchit
+from logging_utils import if_verbose
+from autoincrement import Autoincrement
+import model_registry
+import launchit
 
 def importstr(module_str, from_=None):
     """
@@ -76,29 +77,18 @@ class RunOptimizationParameters:
     study_fname: str
     verbosity: int = 0
 
-# launched within a clean spawned process
-# execution flow: [main_process: mp.Pool] -> [child_process: run_optimization -> objective -> run module (via import)]
-# def run_optimization(params):
-#     if_verbose(params.verbosity, 3, lambda: print(f'{params=}'))
-#     study = optuna.create_study(
-#         study_name=params.study_name,
-#         direction=params.direction,
-#         storage=JournalStorage(JournalFileBackend(file_path=params.journal_fname)),
-#         load_if_exists=True,
-#     )
-#     study.optimize(get_objective(params.module_fname, params.verbosity), n_trials=1)
-
 def run_optimization(params):
     if_verbose_ = lambda thres, func: if_verbose(params.verbosity, thres, func)
     if_verbose_(3, lambda: print(f'{params=}'))
     
-    model_registry = lib.model_registry.ModelRegistry(params.model_group_uri)
-    model_version = model_registry.register_model(params.model_name)
+    model_version = int(Autoincrement.get(f'{params.model_group_uri}.{params.model_name}'))
     assert model_version > 0, model_version
+    model_registry_obj = model_registry.ModelRegistry(params.model_group_uri)
+    model_registry_obj.register_model(params.model_name, model_version)
     if_verbose_(1, lambda: print(f'Model instance registered, version={model_version}'))
 
     params.expandvars['MODEL_VERSION'] = model_version
-    module_fname = lib.launchit.launchit(
+    module_fname = launchit.launchit(
         params.notebook_fname, 
         launch_serial=int(model_version),
         expandvars=params.expandvars, 
