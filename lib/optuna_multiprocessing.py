@@ -72,6 +72,8 @@ class RunOptimizationParameters:
     expandvars: dict
     collect_inds: list
     run_path: str    
+    study_name: str
+    study_fname: str
     verbosity: int = 0
 
 # launched within a clean spawned process
@@ -107,9 +109,9 @@ def run_optimization(params):
     if_verbose_(1, lambda: print(f'Created "{module_fname}"'))
 
     study = optuna.create_study(
-        study_name=params.notebook_name,
+        study_name=params.study_name,
         direction='maximize',
-        storage=JournalStorage(JournalFileBackend(file_path=os.path.join(params.run_path, params.notebook_name + '.log'))),
+        storage=JournalStorage(JournalFileBackend(file_path=params.study_fname)),
         load_if_exists=True,
     )
     study.optimize(get_objective(module_fname, params.verbosity), n_trials=1)

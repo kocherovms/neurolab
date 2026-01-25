@@ -65,7 +65,7 @@ class ModelRegistry:
 
                 if r.status_code == 400 and retry_no < retries_count:
                     # possible race condition
-                    print(f'Got Bad Requets status (race condition?), retrying in {retry_no+1} seconds')
+                    print(f'Got Bad Request status (race condition?), retrying in {retry_no+1} seconds')
                     time.sleep(retry_no + 1)
                     continue
                 else:
