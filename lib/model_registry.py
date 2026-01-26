@@ -4,6 +4,8 @@ import string
 import requests
 import time
 
+plus_front_dot = lambda text: '.' + text if text else ''
+
 class ModelRegistry:
     def __init__(self, maven_group_id, nexus_url='http://nexus:8081', nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
         self.maven_group_id = maven_group_id
@@ -80,7 +82,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
             assets = list(filter(lambda a: a['maven2']['extension'] == form_data['maven2.asset1.extension'], self.get_assets(model_name, model_version)))
 
             if assets:
-                print(f'Found existing .{form_data['maven2.asset1.extension']} asset (id={assets[0]['id']}) for {self.maven_group_id}.{model_name},version={model_version}, replacing')
+                print(f'Found existing {plus_front_dot(form_data['maven2.asset1.extension'])} asset (id={assets[0]['id']}) for {self.maven_group_id}.{model_name},version={model_version}, replacing')
                 r = requests.delete(f'{self.nexus_url}/service/rest/v1/assets/{assets[0]['id']}', auth=self.nexus_auth)
                 r.raise_for_status()
                 self.attach_asset(model_name, model_version, model_asset, model_asset_ext, replace=False)
@@ -89,7 +91,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
                 assert False
         else:
             r.raise_for_status()
-            print(f'.{form_data['maven2.asset1.extension']} asset attached to {self.maven_group_id}.{model_name}:{model_version}')
+            print(f'{plus_front_dot(model_asset_classifier)}{plus_front_dot(form_data['maven2.asset1.extension'])} asset attached to {self.maven_group_id}.{model_name}:{model_version}')
 
     def get_assets(self, model_name, model_version):
         query_params = {
@@ -111,7 +113,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
         assets = list(filter(lambda a: a['maven2']['extension'] == asset_ext, assets))
 
         if not assets:
-            raise Exception(f'Failed to locate asset "{asset_ext}" for {self.maven_group_id}.{model_name},version={model_version}')
+            raise Exception(f'Failed to locate asset "{plus_front_dot(asset_ext)}" for {self.maven_group_id}.{model_name}:{model_version}')
 
         print(f'Downloading {assets[0]['downloadUrl']} for asset with id={assets[0]['id']}')
         r = requests.get(assets[0]['downloadUrl'])
