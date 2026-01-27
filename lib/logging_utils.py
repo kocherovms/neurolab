@@ -3,6 +3,7 @@ import sys
 import time
 import logging
 import logging.handlers
+from dataclasses import dataclass
 
 def if_verbose(verbosity, verbosity_threshold, func):
     if verbosity < verbosity_threshold:
@@ -11,40 +12,119 @@ def if_verbose(verbosity, verbosity_threshold, func):
     func()
     sys.stdout.flush()
 
-class Logging(object):
+class Logging:
+    @dataclass
+    class Sink:
+        logger: object = None
+        prepare_message: object = None
+        is_enabled: bool = True
+
+    # super simple singleton
+    _instance = None
+    
+    @staticmethod
+    def get():
+        if Logging._instance is None:
+            return Logging()
+
+        return Logging._instance
+
+    @staticmethod
+    def error(s, with_duration=True, when=True):
+        Logging.get()(s, with_duration, when, log_level=logging.ERROR)
+    
+    @staticmethod
+    def warn(s, with_duration=True, when=True):
+        Logging.get()(s, with_duration, when, log_level=logging.WARN)
+    
+    @staticmethod
+    def info(s, with_duration=True, when=True):
+        Logging.get()(s, with_duration, when, log_level=logging.INFO)
+
+    @staticmethod
+    def debug(s, with_duration=True, when=True):
+        Logging.get()(s, with_duration, when, log_level=logging.DEBUG)
+
+    @staticmethod
+    def trace(s, with_duration=True, when=True):
+        Logging.get()(s, with_duration, when, log_level=logging.DEBUG - 1)
+    
     def __init__(self):
-        self.logger = logging.getLogger('kmslog')
-        self.logger.setLevel(logging.DEBUG)
+        syslog_logger = logging.getLogger('kmslog_syslog')
+        syslog_logger.setLevel(logging.DEBUG)
         
-        if not self.logger.hasHandlers():
-            syslogHandler = logging.handlers.SysLogHandler(address='/dev/log', facility=logging.handlers.SysLogHandler.LOG_LOCAL0)
-            syslogHandler.ident = 'kmstag:'
-            self.logger.addHandler(syslogHandler)
+        if not syslog_logger.hasHandlers():
+            syslog_handler = logging.handlers.SysLogHandler(address='/dev/log', facility=logging.handlers.SysLogHandler.LOG_LOCAL0)
+            syslog_handler.ident = 'kmstag:'
+            syslog_logger.addHandler(syslog_handler)
+
+        stdout_logger = logging.getLogger('kmslog_stdout')
+        stdout_logger.setLevel(logging.DEBUG)
+        
+        if not stdout_logger.hasHandlers():
+            stream_handler = logging.StreamHandler(sys.stdout)
+            stdout_logger.addHandler(stream_handler)
+
+        self.sinks = dict(
+            syslog=Logging.Sink(syslog_logger, self.prepare_syslog_message, True),
+            stdout=Logging.Sink(stdout_logger, self.prepare_stdout_message, True),
+        )
 
         self.app_name = 'MAIN'
         self.prefix_stanzas = dict()
         self.prefix_stanzas_order = []
         self.prefix = ''
-        self.is_enabled = True
         self.last_log_time = time.time()
-        
-    def __call__(self, s, with_duration=True):
+        Logging._instance = self
+
+    def __call__(self, s, with_duration=True, when=True, log_level=logging.INFO):
+        if not when:
+            return
+            
         t = time.time()
         
-        if self.is_enabled:
-            msg = ' ' # without this space following 'PID:'... will be considered as a part of syslogtag by rsyslog, so separate forcibly
-            msg += f'PID:{os.getpid():<10} APP:{self.app_name:<15}'
-            msg += ' ' + self.prefix
-            msg += ' ' if self.prefix else ''
-            
-            if with_duration:
-                duration = max(0, t - self.last_log_time)
-                msg += f'{duration:>9.3f} >> '
-                
-            msg += s
-            self.logger.debug(msg)
+        for sink in self.sinks.values():
+            if sink.is_enabled:
+                msg = sink.prepare_message(s, t, with_duration)
+                sink.logger.log(log_level, msg)
 
         self.last_log_time = t
+
+    def enable(self, sink_name, is_enabled):
+        assert sink_name == 'all' or sink_name in self.sinks
+
+        if sink_name == 'all':
+            for sink in self.sinks.values():
+                sink.is_enabled = is_enabled
+        else:
+            sink = self.sinks[sink_name]
+            sink.is_enabled = is_enabled
+
+    def set_log_level(self, sink_name, log_level):
+        assert sink_name == 'all' or sink_name in self.sinks
+
+        if sink_name == 'all':
+            for sink in self.sinks.values():
+                sink.logger.setLevel(log_level)
+        else:
+            sink = self.sinks[sink_name]
+            sink.logger.setLevel(log_level)
+            
+    def prepare_syslog_message(self, s, t, with_duration):
+        msg = ' ' # without this space following 'PID:'... will be considered as a part of syslogtag by rsyslog, so separate forcibly
+        msg += f'PID:{os.getpid():<10} APP:{self.app_name:<15}'
+        msg += ' ' + self.prefix
+        msg += ' ' if self.prefix else ''
+        
+        if with_duration:
+            duration = max(0, t - self.last_log_time)
+            msg += f'{duration:>9.3f} >> '
+            
+        msg += s
+        return msg
+
+    def prepare_stdout_message(self, s, t, with_duration):
+        return s
 
     def push_prefix(self, stanza_name, stanza_value):
         if stanza_name in self.prefix_stanzas:

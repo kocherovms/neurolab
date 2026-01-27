@@ -6,6 +6,8 @@ import string
 from collections import namedtuple
 from enum import IntEnum, auto 
 
+from logging_utils import *
+
 class Command(IntEnum):
     COLLECT = auto()
     COLLECT_1 = auto()
@@ -16,13 +18,7 @@ class Command(IntEnum):
 
 ExecGraphEntry = namedtuple('ExecGraphEntry', 'command cell_ind source_line_ind is_oneliner stop_source_line_ind')
 
-def if_verbose(verbosity, verbosity_threshold, func):
-    if verbosity < verbosity_threshold:
-        return
-
-    func()
-    
-def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', verbosity=3, max_serials_count=1_000, collect_inds=None):
+def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', max_serials_count=1_000, collect_inds=None):
     fname_dir = os.path.dirname(fname) if not dir_name else dir_name
     fname_name = os.path.splitext(os.path.basename(fname))[0]
     fname_ext = os.path.splitext(fname)[1] if not make_py_file else '.py'
@@ -38,7 +34,7 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
     else:
         raise Exception(f'Failed to generate new launch file name: all variants are taken')
 
-    if_verbose(verbosity, 2, lambda: print(f'Creating {new_fname}'))
+    Logging.debug(f'Creating {new_fname}')
     
     with open(fname, 'r') as f:
         nb = json.load(f)
@@ -51,7 +47,7 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                 m = re.match(r'^(.*)#\s*@launchit\.(\w+)\s*$', source_line)
                 
                 if m:
-                    if_verbose(verbosity, 3, lambda: print(f'Cell {cell_ind}, launchit stanza: "{source_line}"'))
+                    Logging.trace(f'Cell {cell_ind}, launchit stanza: "{source_line}"')
                     before = m.group(1)
                     command = m.group(2)
                     ege = ExecGraphEntry(command=None, cell_ind=cell_ind, source_line_ind=source_line_ind, is_oneliner=re.match(r'[^\s]+', before), stop_source_line_ind=-1)
@@ -80,10 +76,10 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                                     raise Exception(f'Cell {cell_ind}, line {source_line_ind}, @launchit.stop has no preceeding command')
                                 elif lb_ege.stop_source_line_ind == -1:
                                     exec_graph[lb_ege_ind] = lb_ege._replace(stop_source_line_ind=source_line_ind)
-                                    if_verbose(verbosity, 3, lambda: print(f'Cell {cell_ind}, command {lb_ege.command.name} at line {lb_ege.source_line_ind} will stop at line {source_line_ind}'))
+                                    Logging.trace(f'Cell {cell_ind}, command {lb_ege.command.name} at line {lb_ege.source_line_ind} will stop at line {source_line_ind}')
                                     break
                         case _:
-                            print(f'WARNING! Cell {cell_ind} contains unrecognized launchit command: "{command}"')
+                            Logging.warn(f'WARNING! Cell {cell_ind} contains unrecognized launchit command: "{command}"')
     
                     if not ege.command is None:
                         exec_graph.append(ege)
@@ -105,18 +101,18 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
 
                     if not do_collect:
                         if ege.is_oneliner:
-                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, skip collecting source line {ege.source_line_ind}'))
+                            Logging.trace(f'Cell {ege.cell_ind}, skip collecting source line {ege.source_line_ind}')
                         else:
                             assert ege.source_line_ind + 1 < stop_source_line_ind
-                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, skip collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}'))
+                            Logging.trace(f'Cell {ege.cell_ind}, skip collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}')
                     else:
                         if ege.is_oneliner:
-                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, collecting source line {ege.source_line_ind}'))
+                            Logging.trace(f'Cell {ege.cell_ind}, collecting source line {ege.source_line_ind}')
                             source_line = cell['source'][ege.source_line_ind]
                             collected_source_lines.append(source_line)
                         else:
                             assert ege.source_line_ind + 1 < stop_source_line_ind
-                            if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}'))
+                            Logging.trace(f'Cell {ege.cell_ind}, collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}')
         
                             if collected_source_lines:
                                 collected_source_lines.append('\n')
@@ -125,7 +121,7 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                                 source_line = cell['source'][source_line_ind]
                                 collected_source_lines.append(source_line)
                 case Command.COLLECTED:
-                    if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, putting {len(collected_source_lines)} collected source lines to {ege.source_line_ind}'))
+                    Logging.trace(f'Cell {ege.cell_ind}, putting {len(collected_source_lines)} collected source lines to {ege.source_line_ind}')
     
                     for ind, source_line in enumerate(collected_source_lines):
                         if ind > 0:
@@ -140,11 +136,11 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                             return '# ' + s
                     
                     if ege.is_oneliner:
-                        if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, disabling source line {ege.source_line_ind}'))
+                        Logging.trace(f'Cell {ege.cell_ind}, disabling source line {ege.source_line_ind}')
                         cell['source'][ege.source_line_ind] = disable_source_line(cell['source'][ege.source_line_ind])
                     else:
                         assert ege.source_line_ind + 1 < stop_source_line_ind
-                        if_verbose(verbosity, 3, lambda: print(f'Cell {ege.cell_ind}, disabling source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}'))
+                        Logging.trace(f'Cell {ege.cell_ind}, disabling source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}')
     
                         for source_line_ind in range(ege.source_line_ind + 1, stop_source_line_ind):
                             cell['source'][source_line_ind] = disable_source_line(cell['source'][source_line_ind])

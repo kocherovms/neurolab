@@ -7,7 +7,7 @@ import optuna
 from optuna.storages import JournalStorage
 from optuna.storages.journal import JournalFileBackend
 
-from logging_utils import if_verbose
+from logging_utils import *
 from autoincrement import Autoincrement
 import model_registry
 import launchit
@@ -48,24 +48,26 @@ def get_trial():
 def save_trial_result(result):
     ENVELOPE.result = result
 
-def get_objective(module_fname, verbosity):
+def get_objective(module_fname):
     def objective(trial):
         module_dir_name = os.path.dirname(module_fname)
         module_name = os.path.splitext(os.path.basename(module_fname))[0]
-        if_verbose(verbosity, 3, lambda: print(f'{module_fname=}, {module_dir_name=}, {module_name=}'))
+        Logging.trace(f'{module_fname=}, {module_dir_name=}, {module_name=}')
     
         sys.path.append(module_dir_name)
         ENVELOPE.trial = trial
         importstr(*module_name.rsplit('.', 1))
         result = ENVELOPE.result
     
-        if_verbose(verbosity, 1, lambda: print(f'Finished {module_name}, result={result}'))
+        Logging.info(f'Finished {module_name}, result={result}')
         return result
 
     return objective
 
 @dataclass
 class RunOptimizationParameters:
+    app_name: str
+    is_stdout_enabled: bool
     notebook_fname: str
     notebook_name: str
     model_group_uri: str
@@ -75,28 +77,27 @@ class RunOptimizationParameters:
     run_path: str    
     study_name: str
     study_fname: str
-    verbosity: int = 0
 
+# Launched from under the spawned process
 def run_optimization(params):
-    if_verbose_ = lambda thres, func: if_verbose(params.verbosity, thres, func)
-    if_verbose_(3, lambda: print(f'{params=}'))
+    Logging.get().app_name = params.app_name
+    Logging.get().enable('stdout', params.is_stdout_enabled)
     
     model_version = int(Autoincrement.get(f'{params.model_group_uri}.{params.model_name}'))
     assert model_version > 0, model_version
     model_registry_obj = model_registry.ModelRegistry(params.model_group_uri)
     model_registry_obj.register_model(params.model_name, model_version)
-    if_verbose_(1, lambda: print(f'Model instance registered, version={model_version}'))
+    Logging.info(f'Model instance registered, version={model_version}')
 
     params.expandvars['MODEL_VERSION'] = model_version
     module_fname = launchit.launchit(
         params.notebook_fname, 
         launch_serial=int(model_version),
         expandvars=params.expandvars, 
-        verbosity=params.verbosity, 
         make_py_file=True, 
         dir_name=params.run_path,
         collect_inds=params.collect_inds)
-    if_verbose_(1, lambda: print(f'Created "{module_fname}"'))
+    Logging.info(f'Created "{module_fname}"')
 
     study = optuna.create_study(
         study_name=params.study_name,
@@ -104,4 +105,4 @@ def run_optimization(params):
         storage=JournalStorage(JournalFileBackend(file_path=params.study_fname)),
         load_if_exists=True,
     )
-    study.optimize(get_objective(module_fname, params.verbosity), n_trials=1)
+    study.optimize(get_objective(module_fname), n_trials=1)
