@@ -6,8 +6,6 @@ import time
 
 from logging_utils import *
 
-plus_front_dot = lambda text: '.' + text if text else ''
-
 class ModelRegistry:
     def __init__(self, maven_group_id, nexus_url='http://nexus:8081', nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
         self.maven_group_id = maven_group_id
@@ -49,7 +47,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
             r = requests.post(f'{self.nexus_url}/service/rest/v1/components', auth=self.nexus_auth, params=query_params, data=form_data, files=files)
             r.raise_for_status()
 
-    def attach_asset(self, model_name, model_version, model_asset, model_asset_classifier='', model_asset_ext='', replace=False):
+    def attach_asset(self, model_name, model_version, asset, asset_ext='', asset_classifier='', replace=False):
         query_params = {
             'repository': self.maven_repo,
         }
@@ -60,41 +58,41 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
             'version': model_version,
         }
 
-        if model_asset_classifier:
-            form_data['maven2.asset1.classifier'] = model_asset_classifier
+        if asset_classifier:
+            form_data['maven2.asset1.classifier'] = asset_classifier
         
         files = {}
         do_post = lambda: requests.post(f'{self.nexus_url}/service/rest/v1/components', auth=self.nexus_auth, params=query_params, data=form_data, files=files)
         
-        if isinstance(model_asset, str):
-            with open(model_asset, 'rb') as asset_file:
+        if isinstance(asset, str):
+            with open(asset, 'rb') as asset_file:
                 files['maven2.asset1'] = asset_file
-                form_data['maven2.asset1.extension'] = os.path.splitext(model_asset)[1].lstrip('.')
+                form_data['maven2.asset1.extension'] = os.path.splitext(asset)[1].lstrip('.')
                 r = do_post()
-        elif isinstance(model_asset, io.IOBase):
-            assert model_asset_ext, 'model_asset_ext arg must be specified'
-            model_asset.seek(0)
-            files['maven2.asset1'] = model_asset
-            form_data['maven2.asset1.extension'] = model_asset_ext
+        elif isinstance(asset, io.IOBase):
+            assert asset_ext, 'asset_ext arg must be specified'
+            asset.seek(0)
+            files['maven2.asset1'] = asset
+            form_data['maven2.asset1.extension'] = asset_ext
             r = do_post()
         else:
             assert False, f'Unsupported asset type={type(asset)}'
 
         if r.status_code == 400 and replace:
-            assets = list(filter(lambda a: a['maven2']['extension'] == form_data['maven2.asset1.extension'], self.get_assets(model_name, model_version)))
+            assets = self.filter_assets(self.get_assets(model_name, model_version), form_data['maven2.asset1.extension'], asset_classifier)
 
             if assets:
-                Logging.info(f'Found existing {plus_front_dot(form_data['maven2.asset1.extension'])} asset (id={assets[0]['id']}) ' + 
+                Logging.info(f'Found existing {self.describe_asset(form_data['maven2.asset1.extension'], asset_classifier)} asset (id={assets[0]['id']}) ' + 
                              f'for {self.maven_group_id}.{model_name},version={model_version}, replacing')
                 r = requests.delete(f'{self.nexus_url}/service/rest/v1/assets/{assets[0]['id']}', auth=self.nexus_auth)
                 r.raise_for_status()
-                self.attach_asset(model_name, model_version, model_asset, model_asset_classifier, model_asset_ext, replace=False)
+                self.attach_asset(model_name, model_version, asset, asset_ext, asset_classifier, replace=False)
             else:
                 r.raise_for_status()
                 assert False
         else:
             r.raise_for_status()
-            Logging.info(f'{plus_front_dot(model_asset_classifier)}{plus_front_dot(form_data['maven2.asset1.extension'])} asset attached to {self.maven_group_id}.{model_name}:{model_version}')
+            Logging.info(f'{self.describe_asset(form_data['maven2.asset1.extension'], asset_classifier)} asset attached to {self.maven_group_id}.{model_name}:{model_version}')
 
     def get_assets(self, model_name, model_version):
         query_params = {
@@ -111,15 +109,34 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
 
         return items[0]['assets']
 
-    def get_asset_content(self, model_name, model_version, asset_ext):
+    def get_asset_content(self, model_name, model_version, asset_ext, asset_classifier=''):
+        assert asset_ext, 'asset_ext arg must be specified'
         assets = self.get_assets(model_name, model_version)
-        assets = list(filter(lambda a: a['maven2']['extension'] == asset_ext, assets))
+        assets = self.filter_assets(assets, asset_ext, asset_classifier)
 
         if not assets:
-            raise Exception(f'Failed to locate asset "{plus_front_dot(asset_ext)}" for {self.maven_group_id}.{model_name}:{model_version}')
+            raise Exception(f'Failed to locate asset {self.describe_asset(asset_ext, asset_classifier)} for {self.maven_group_id}.{model_name}:{model_version}')
 
         Logging.debug(f'Downloading {assets[0]['downloadUrl']} for asset with id={assets[0]['id']}')
         r = requests.get(assets[0]['downloadUrl'])
         r.raise_for_status()
-        return r.content       
+        return r.content
+
+    def describe_asset(self, asset_ext, asset_classifier):
+        result = ''
+        
+        if asset_classifier:
+            result += '.' + asset_classifier
+
+        return result + '.' + asset_ext
+
+    def filter_assets(self, assets, asset_ext, asset_classifier):
+        is_ext_match = lambda a: a['maven2']['extension'] == asset_ext # mandatory match
+        filter_func = is_ext_match
+
+        if asset_classifier:
+            is_classifier_match = lambda a: a['maven2'].get('classifier', '') == asset_classifier # optional match
+            filter_func = lambda a: is_ext_match(a) and is_classifier_match(a)
+            
+        return list(filter(filter_func, assets))            
         

@@ -56,7 +56,10 @@ def get_objective(module_fname):
     
         sys.path.append(module_dir_name)
         ENVELOPE.trial = trial
-        importstr(*module_name.rsplit('.', 1))
+
+        with Logging.get().auto_prefix('TRIAL', trial.number):
+            importstr(*module_name.rsplit('.', 1))
+            
         result = ENVELOPE.result
     
         Logging.info(f'Finished {module_name}, result={result}')
@@ -65,7 +68,7 @@ def get_objective(module_fname):
     return objective
 
 @dataclass
-class RunOptimizationParameters:
+class RunOptimizationTask:
     app_name: str
     is_stdout_enabled: bool
     notebook_fname: str
@@ -77,32 +80,34 @@ class RunOptimizationParameters:
     run_path: str    
     study_name: str
     study_fname: str
+    optimize_direction: str
 
 # Launched from under the spawned process
-def run_optimization(params):
-    Logging.get().app_name = params.app_name
-    Logging.get().enable('stdout', params.is_stdout_enabled)
+def run_optimization(task):
+    Logging.get().app_name = task.app_name
+    Logging.get().enable('stdout', task.is_stdout_enabled)
     
-    model_version = int(Autoincrement.get(f'{params.model_group_uri}.{params.model_name}'))
+    model_version = int(Autoincrement.get(f'{task.model_group_uri}.{task.model_name}'))
     assert model_version > 0, model_version
-    model_registry_obj = model_registry.ModelRegistry(params.model_group_uri)
-    model_registry_obj.register_model(params.model_name, model_version)
+    model_registry_obj = model_registry.ModelRegistry(task.model_group_uri)
+    model_registry_obj.register_model(task.model_name, model_version)
     Logging.info(f'Model instance registered, version={model_version}')
 
-    params.expandvars['MODEL_VERSION'] = model_version
-    module_fname = launchit.launchit(
-        params.notebook_fname, 
-        launch_serial=int(model_version),
-        expandvars=params.expandvars, 
-        make_py_file=True, 
-        dir_name=params.run_path,
-        collect_inds=params.collect_inds)
-    Logging.info(f'Created "{module_fname}"')
-
-    study = optuna.create_study(
-        study_name=params.study_name,
-        direction='maximize',
-        storage=JournalStorage(JournalFileBackend(file_path=params.study_fname)),
-        load_if_exists=True,
-    )
-    study.optimize(get_objective(module_fname), n_trials=1)
+    with Logging.get().auto_prefix('MVER', model_version):
+        task.expandvars['MODEL_VERSION'] = model_version
+        module_fname = launchit.launchit(
+            task.notebook_fname, 
+            launch_serial=int(model_version),
+            expandvars=task.expandvars, 
+            make_py_file=True, 
+            dir_name=task.run_path,
+            collect_inds=task.collect_inds)
+        Logging.info(f'Created "{module_fname}"')
+    
+        study = optuna.create_study(
+            study_name=task.study_name,
+            direction=task.optimize_direction,
+            storage=JournalStorage(JournalFileBackend(file_path=task.study_fname)),
+            load_if_exists=True,
+        )
+        study.optimize(get_objective(module_fname), n_trials=1)

@@ -51,7 +51,6 @@ class Logging:
     
     def __init__(self):
         syslog_logger = logging.getLogger('kmslog_syslog')
-        syslog_logger.setLevel(logging.DEBUG)
         
         if not syslog_logger.hasHandlers():
             syslog_handler = logging.handlers.SysLogHandler(address='/dev/log', facility=logging.handlers.SysLogHandler.LOG_LOCAL0)
@@ -59,7 +58,6 @@ class Logging:
             syslog_logger.addHandler(syslog_handler)
 
         stdout_logger = logging.getLogger('kmslog_stdout')
-        stdout_logger.setLevel(logging.DEBUG)
         
         if not stdout_logger.hasHandlers():
             stream_handler = logging.StreamHandler(sys.stdout)
@@ -69,6 +67,8 @@ class Logging:
             syslog=Logging.Sink(syslog_logger, self.prepare_syslog_message, True),
             stdout=Logging.Sink(stdout_logger, self.prepare_stdout_message, True),
         )
+
+        self.set_log_level('all', logging.DEBUG)
 
         self.app_name = 'MAIN'
         self.prefix_stanzas = dict()
