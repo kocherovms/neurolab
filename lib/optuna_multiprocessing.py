@@ -77,6 +77,7 @@ class RunOptimizationTask:
     model_name: str
     expandvars: dict
     collect_inds: list
+    disable_inds: list
     run_path: str    
     study_name: str
     study_fname: str
@@ -101,7 +102,9 @@ def run_optimization(task):
             expandvars=task.expandvars, 
             make_py_file=True, 
             dir_name=task.run_path,
-            collect_inds=task.collect_inds)
+            collect_inds=task.collect_inds,
+            disable_inds=task.disable_inds,
+        )
         Logging.info(f'Created "{module_fname}"')
     
         study = optuna.create_study(

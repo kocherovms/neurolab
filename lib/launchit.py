@@ -14,11 +14,14 @@ class Command(IntEnum):
     COLLECT_2 = auto()
     COLLECT_3 = auto()
     COLLECTED = auto()
-    DISABLE = auto()    
+    DISABLE = auto()
+    DISABLE_1 = auto()
+    DISABLE_2 = auto()
+    DISABLE_3 = auto()
 
 ExecGraphEntry = namedtuple('ExecGraphEntry', 'command cell_ind source_line_ind is_oneliner stop_source_line_ind')
 
-def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', max_serials_count=1_000, collect_inds=None):
+def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', max_serials_count=1_000, collect_inds=None, disable_inds=None):
     fname_dir = os.path.dirname(fname) if not dir_name else dir_name
     fname_name = os.path.splitext(os.path.basename(fname))[0]
     fname_ext = os.path.splitext(fname)[1] if not make_py_file else '.py'
@@ -55,6 +58,12 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                     match command:
                         case 'disable':
                             ege = ege._replace(command=Command.DISABLE)
+                        case 'disable_1':
+                            ege = ege._replace(command=Command.DISABLE_1)
+                        case 'disable_2':
+                            ege = ege._replace(command=Command.DISABLE_2)
+                        case 'disable_3':
+                            ege = ege._replace(command=Command.DISABLE_3)
                         case 'collect':
                             ege = ege._replace(command=Command.COLLECT)
                         case 'collect_1':
@@ -128,8 +137,20 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                             cell['source'].insert(ege.source_line_ind + ind, source_line)
                         else:
                             cell['source'][ege.source_line_ind + ind] = source_line
-                case Command.DISABLE:
+                case Command.DISABLE | Command.DISABLE_1 | Command.DISABLE_2 | Command.DISABLE_3:
                     def disable_source_line(s):
+                        do_disable = disable_inds is None
+
+                        if not do_disable:
+                            do_disable = ege.command == Command.DISABLE
+
+                        if not do_disable:
+                            disable_ind = {Command.DISABLE_1: 1, Command.DISABLE_2: 2, Command.DISABLE_3: 3}[ege.command]
+                            do_disable = disable_ind in disable_inds
+
+                        if not do_disable:
+                            return s
+                            
                         if re.match(r'^\s*#', s):
                             return s # already disabled
                         else:
@@ -148,6 +169,7 @@ def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name
                     assert False, f'Failed to understand exec_graph_entry={ege}'
 
         expandvars['LAUNCHIT_FNAME'] = new_fname
+        Logging.trace(f'{expandvars=}')
         
         for cell in nb['cells']:
             for source_line_ind, source_line in enumerate(cell['source']):

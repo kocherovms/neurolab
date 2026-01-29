@@ -83,7 +83,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
 
             if assets:
                 Logging.info(f'Found existing {self.describe_asset(form_data['maven2.asset1.extension'], asset_classifier)} asset (id={assets[0]['id']}) ' + 
-                             f'for {self.maven_group_id}.{model_name},version={model_version}, replacing')
+                             f'for {self.maven_group_id}.{model_name}:{model_version}, replacing')
                 r = requests.delete(f'{self.nexus_url}/service/rest/v1/assets/{assets[0]['id']}', auth=self.nexus_auth)
                 r.raise_for_status()
                 self.attach_asset(model_name, model_version, asset, asset_ext, asset_classifier, replace=False)

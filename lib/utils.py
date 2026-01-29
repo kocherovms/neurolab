@@ -215,3 +215,12 @@ class ArrayUtils:
             return np.r_[v, np.full(pad_elems_count, pad_value)].reshape(sz, sz)
         else:
             return v.reshape(sz, sz)
+
+###
+class LangUtils:
+    @staticmethod
+    def from_str(cast_func, s, default_value):
+        try:
+            return cast_func(s)
+        except ValueError:
+            return default_value
