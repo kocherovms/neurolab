@@ -81,7 +81,7 @@ class RunOptimizationTask:
     run_path: str    
     study_name: str
     study_fname: str
-    optimize_direction: str
+    optimize_directions: list
 
 # Launched from under the spawned process
 def run_optimization(task):
@@ -109,7 +109,7 @@ def run_optimization(task):
     
         study = optuna.create_study(
             study_name=task.study_name,
-            direction=task.optimize_direction,
+            directions=task.optimize_directions,
             storage=JournalStorage(JournalFileBackend(file_path=task.study_fname)),
             load_if_exists=True,
         )
