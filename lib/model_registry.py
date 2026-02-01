@@ -122,6 +122,12 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
         r.raise_for_status()
         return r.content
 
+    def is_asset_present(self, model_name, model_version, asset_ext, asset_classifier=''):
+        assert asset_ext, 'asset_ext arg must be specified'
+        assets = self.get_assets(model_name, model_version)
+        assets = self.filter_assets(assets, asset_ext, asset_classifier)
+        return len(assets) > 0
+
     def describe_asset(self, asset_ext, asset_classifier):
         result = ''
         
