@@ -1,0 +1,6 @@
+[DEFAULT]
+sample_size=128
+
+[SQLITE3_SEQ_GRID_0_2_4096]
+dataset_path=../../data
+db_file_name_prefix=seq_grid_0_2_4096_
