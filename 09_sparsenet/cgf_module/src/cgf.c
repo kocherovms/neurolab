@@ -222,12 +222,14 @@ float	*p,*grad;
   gcount++;
 }
 
+// Функция для регуляризации разреженности
 double sparse(x)
 double	x;
 {
   return(log(1.0+x*x));
 }
 
+// Производная от функции sparse(x)
 double sparse_prime(x)
 double	x;
 {
