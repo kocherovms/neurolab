@@ -1,7 +1,9 @@
 import os, io
 import numpy as np
+import cupy as cp
 import IPython
 from PIL import Image, ImageDraw
+import math
 
 ### 
 class DBUtils:
@@ -201,6 +203,10 @@ class PILUtils:
 
 ###
 class ArrayUtils:
+    from_gpu = lambda a: a.get() if isinstance(a, cp.ndarray) else a if cp.cuda.is_available() else lambda a: a
+    to_gpu =  lambda a: cp.asarray(a) if isinstance(a, np.ndarray) else a if cp.cuda.is_available() else lambda a: a
+    to_gpu_copy =  lambda a: cp.asarray(a) if isinstance(a, np.ndarray) else a if cp.cuda.is_available() else lambda a: a.copy()
+    
     @staticmethod
     def v2sm(v, pad_value=None):
         assert v.ndim == 1
@@ -216,6 +222,21 @@ class ArrayUtils:
         else:
             return v.reshape(sz, sz)
 
+    @staticmethod
+    def ensure_dtype(a, dt):
+        assert a.dtype == dt, (a.dtype, dt)
+        return a
+
+    @staticmethod
+    def ensure_shape(a, shape):
+        assert a.shape == shape, (a.shape, shape)
+        return a
+        
+    @staticmethod
+    def ensure_len(a, l):
+        assert len(a) == l, (len(a), l)
+        return a
+
 ###
 class LangUtils:
     @staticmethod
@@ -224,3 +245,11 @@ class LangUtils:
             return cast_func(s)
         except ValueError:
             return default_value
+
+###
+class CudaUtils:
+    @staticmethod
+    def exec_cuda_kernel(kernel, items_count, params):
+        cuda_block_size = 256
+        cuda_blocks_count = math.ceil(items_count / cuda_block_size)
+        kernel((cuda_blocks_count, ), (cuda_block_size,), params)
