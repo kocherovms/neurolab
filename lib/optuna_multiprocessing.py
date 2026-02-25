@@ -48,7 +48,7 @@ def get_trial():
 def save_trial_result(result):
     ENVELOPE.result = result
 
-def get_objective(module_fname):
+def get_objective(module_fname, study_serial, study_name):
     def objective(trial):
         module_dir_name = os.path.dirname(module_fname)
         module_name = os.path.splitext(os.path.basename(module_fname))[0]
@@ -56,6 +56,8 @@ def get_objective(module_fname):
     
         sys.path.append(module_dir_name)
         ENVELOPE.trial = trial
+        trial.set_user_attr('STUDY_SERIAL', study_serial)
+        trial.set_user_attr('STUDY_NAME', study_name)
 
         with Logging.get().auto_prefix('TRIAL', trial.number):
             importstr(*module_name.rsplit('.', 1))
@@ -78,7 +80,8 @@ class RunOptimizationTask:
     expandvars: dict
     collect_inds: list
     disable_inds: list
-    run_path: str    
+    run_path: str  
+    study_serial: int
     study_name: str
     study_fname: str
     optimize_directions: list
@@ -113,4 +116,4 @@ def run_optimization(task):
             storage=JournalStorage(JournalFileBackend(file_path=task.study_fname)),
             load_if_exists=True,
         )
-        study.optimize(get_objective(module_fname), n_trials=1)
+        study.optimize(get_objective(module_fname, task.study_serial, task.study_name), n_trials=1)
