@@ -9,7 +9,7 @@ class LrSchedulerWrapper:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **hp_learn_rate_params.plateau._asdict())
             self.step = self.step_plateau
 
-    def step_dummy(self):
+    def step_dummy(self, loss):
         pass
     
     def step_plateau(self, loss):
