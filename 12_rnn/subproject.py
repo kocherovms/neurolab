@@ -6,10 +6,11 @@ import torch.utils.data
 class ChunkDataset(torch.utils.data.IterableDataset):
     def __init__(self, db_fname, prefetch_buffer_size=100, rng=None):
         super().__init__()
-        self.db_con = sqlite3.connect(db_fname)
-        self.min_row_id, self.max_row_id = self.db_con.execute('SELECT min(rowid), max(rowid) FROM chunks').fetchone()
+        self.db_con = sqlite3.connect(f'file:{db_fname}?mode=ro', uri=True)
+        self.vocab_size = self.db_con.execute('SELECT COUNT(rowid) FROM vocab').fetchone()[0]
+        self.min_row_id, self.max_row_id = self.db_con.execute('SELECT MIN(rowid), MAX(rowid) FROM chunks').fetchone()
         self.rows_count = self.max_row_id - self.min_row_id + 1
-        assert self.rows_count == self.db_con.execute('SELECT count(rowid) FROM chunks').fetchone()[0], (self.rows_count, self.min_row_id, self.max_row_id)
+        assert self.rows_count == self.db_con.execute('SELECT COUNT(rowid) FROM chunks').fetchone()[0], (self.rows_count, self.min_row_id, self.max_row_id)
         self.row_ids = []
         self.row_ids_ind = -1
         self.prefetch_buffer_size = prefetch_buffer_size
