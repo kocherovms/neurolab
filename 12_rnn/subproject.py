@@ -5,6 +5,7 @@ import torch.utils.data
 import re
 from collections import Counter
 from enum import Flag, StrEnum, auto 
+import pandas as pd
 
 class TokenLevel(StrEnum):
     SYMBOL = auto()
@@ -102,7 +103,7 @@ class ChunkDataset(torch.utils.data.IterableDataset):
         self.rng = np.random.default_rng() if rng is None else rng
 
     def __len__(self):
-        return self.rows_count if self.max_chunks_count is None else self.max_chunks_count
+        return self.rows_count if self.max_chunks_count is None else min(self.rows_count, self.max_chunks_count)
         
     def __iter__(self):
         rows_count_for_iteration = len(self)
@@ -132,3 +133,7 @@ class ChunkDataset(torch.utils.data.IterableDataset):
         rows = torch.tensor(rows)
         assert len(rows) == len(fetch_row_ids), (len(rows), len(fetch_row_ids))
         self.prefetch_buffer = iter(rows)
+
+def load_vocab(db_fname):
+    with sqlite3.connect(f'file:{db_fname}?mode=ro', uri=True) as db_con:
+        return pd.read_sql('SELECT * FROM vocab', db_con)
