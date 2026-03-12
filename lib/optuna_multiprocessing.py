@@ -59,7 +59,7 @@ def get_objective(module_fname, study_serial, study_name):
         trial.set_user_attr('STUDY_SERIAL', study_serial)
         trial.set_user_attr('STUDY_NAME', study_name)
 
-        with Logging.get().auto_prefix('OSERIAL', study_serial, 'OTRIAL', trial.number):
+        with Logging.get().auto_prefix('OSTUDY', study_serial, 'OTRIAL', trial.number):
             importstr(*module_name.rsplit('.', 1))
             
         result = ENVELOPE.result
