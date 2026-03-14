@@ -131,6 +131,7 @@ class Conv2dModelUnit(nn.Module):
     def forward(self, inp): 
         # inp.shape: batch, channel, height, width
         res = self.conv(inp)
+        res = self.batch_norm2d(res)
         res = self.nonlinearity(res)
         res = self.gain(res)
         res = self.rectification(res)
