@@ -246,6 +246,29 @@ class LangUtils:
         except ValueError:
             return default_value
 
+    @staticmethod
+    def coalesce_fn(v, fn, default_value):
+        if v is None:
+            return default_value
+
+        return fn(v)
+
+    @staticmethod
+    def coalesce(v, default_value):
+        if v is None:
+            return default_value
+
+        return v
+
+    @staticmethod
+    def to_number(v):
+        assert isinstance(v, str)
+        
+        if '.' in v:
+            return float(v)
+        else:
+            return int(v)
+
 ###
 class CudaUtils:
     @staticmethod
