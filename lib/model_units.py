@@ -73,6 +73,11 @@ class Conv2dModelUnit(nn.Module):
         else:
             self.batch_norm2d = nn.BatchNorm2d(*LangUtils.coalesce(params.batch_norm2d.args, ()), **LangUtils.coalesce(params.batch_norm2d.kwargs, {}))
 
+        if params.instance_norm2d is None:
+            self.instance_norm2d = lambda i: i
+        else:
+            self.instance_norm2d = nn.InstanceNorm2d(*LangUtils.coalesce(params.instance_norm2d.args, ()), **LangUtils.coalesce(params.instance_norm2d.kwargs, {}))
+
         if params.nonlinearity is None:
             self.nonlinearity = lambda i: i
         else:
@@ -132,6 +137,7 @@ class Conv2dModelUnit(nn.Module):
         # inp.shape: batch, channel, height, width
         res = self.conv(inp)
         res = self.batch_norm2d(res)
+        res = self.instance_norm2d(res)
         res = self.nonlinearity(res)
         res = self.gain(res)
         res = self.rectification(res)

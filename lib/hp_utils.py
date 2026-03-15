@@ -20,6 +20,7 @@ class Conv2dModelUnitParams:
     module: str = None
     convolution: object = None
     batch_norm2d: object = None
+    instance_norm2d: object = None
     nonlinearity: object = None 
     with_gain: bool = None
     rectification: str = None
@@ -40,15 +41,10 @@ class NonlinearityParams:
     kwargs: dict = None
 
 @dataclass
-class BatchNorm2dParams:
+class OrdinaryParams:
     args: list = None
     kwargs: dict = None
 
-@dataclass
-class DropoutParams:
-    args: list = None
-    kwargs: dict = None
-    
 @dataclass
 class LearnRateParams: 
     Plateau = namedtuple('Plateau', 'factor patience')
@@ -80,7 +76,7 @@ class ModelUnitsParser:
     
             # CONV_2D UNIT
             conv2d_unit_spec: "Conv2d" "(" _conv_unit_spec ")" | "Conv2d" ":" _conv_unit_spec
-            _conv_unit_spec: conv_spec ("->" batch_norm2d_spec)? ("->" nonlinearity_spec)? ("->" GAIN)? ("->" RECTIFICATION)? ("->" normalization_spec)? ("->" filtered_pool_spec)? (";" weights_source_spec)?
+            _conv_unit_spec: conv_spec ("->" norm2d_spec)? ("->" nonlinearity_spec)? ("->" GAIN)? ("->" RECTIFICATION)? ("->" normalization_spec)? ("->" filtered_pool_spec)? (";" weights_source_spec)?
             conv_spec: "conv" "(" IN_CHANNELS_COUNT "->" OUT_CHANNELS_COUNT "(" IN_CHANNELS_COUNT_PER_KERNEL ")" "x" KERNEL_SIZE BIAS? [("," padding_spec) | ("," stride_spec)]* ")"
             padding_spec: "padding" "=" PADDING
             stride_spec: "stride" "=" STRIDE
@@ -115,9 +111,15 @@ class ModelUnitsParser:
             ## NONLINEARITY
             nonlinearity_spec: NONLINEARITY ( "(" arg_list_spec ")" )?
             NONLINEARITY: WORD
+
+            ## NORM_2D
+            norm2d_spec: batch_norm2d_spec | instance_norm2d_spec
     
             ## BATCH_NORM_2D
             batch_norm2d_spec: "BatchNorm2d" ( "(" arg_list_spec ")" )?
+
+            ## INSTANCE_NORM_2D
+            instance_norm2d_spec: "InstanceNorm2d" ( "(" arg_list_spec ")" )?
     
             ### Shared specs
             expand_var_spec: "$" IDENTIFIER
@@ -185,6 +187,7 @@ class ModelUnitsParser:
                 )
     
                 params.batch_norm2d = self.create_batch_norm2d_params(spec_subtree)
+                params.instance_norm2d = self.create_instance_norm2d_params(spec_subtree)
                 params.nonlinearity = self.create_nonlinearity_params(spec_subtree)
                 params.with_gain = bool(gtv('GAIN', ''))
                 params.rectification = gtv('RECTIFICATION', None)
@@ -232,7 +235,7 @@ class ModelUnitsParser:
     def create_dropout_params(self, tree):
         if t := list(tree.find_data('dropout_spec')):
             args, kwargs = self.parse_arg_list(t[0])
-            return DropoutParams(args=args, kwargs=kwargs)
+            return OrdinaryParams(args=args, kwargs=kwargs)
 
         return None
     
@@ -246,7 +249,14 @@ class ModelUnitsParser:
     def create_batch_norm2d_params(self, tree):
         if t := list(tree.find_data('batch_norm2d_spec')):
             args, kwargs = self.parse_arg_list(t[0])
-            return BatchNorm2dParams(args=args, kwargs=kwargs)
+            return OrdinaryParams(args=args, kwargs=kwargs)
+
+        return None
+
+    def create_instance_norm2d_params(self, tree):
+        if t := list(tree.find_data('instance_norm2d_spec')):
+            args, kwargs = self.parse_arg_list(t[0])
+            return OrdinaryParams(args=args, kwargs=kwargs)
 
         return None
         
