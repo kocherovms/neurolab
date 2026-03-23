@@ -203,9 +203,23 @@ class PILUtils:
 
 ###
 class ArrayUtils:
-    from_gpu = lambda a: a.get() if isinstance(a, cp.ndarray) else a if cp.cuda.is_available() else lambda a: a
-    to_gpu =  lambda a: cp.asarray(a) if isinstance(a, np.ndarray) else a if cp.cuda.is_available() else lambda a: a
-    to_gpu_copy =  lambda a: cp.asarray(a) if isinstance(a, np.ndarray) else a if cp.cuda.is_available() else lambda a: a.copy()
+    xp = None
+    from_gpu = None 
+    to_gpu = None
+    to_gpu_copy = None
+
+    @staticmethod
+    def init(is_cuda=None):
+        if LangUtils.coalesce(is_cuda, cp.cuda.is_available()):
+            ArrayUtils.xp = cp
+            ArrayUtils.from_gpu = lambda a: a.get() if isinstance(a, cp.ndarray) else a
+            ArrayUtils.to_gpu = lambda a: cp.asarray(a) if isinstance(a, np.ndarray) else a
+            ArrayUtils.to_gpu_copy = lambda a: cp.asarray(a) if isinstance(a, np.ndarray) else a
+        else:
+            ArrayUtils.xp = np
+            ArrayUtils.from_gpu = lambda a: a
+            ArrayUtils.to_gpu = lambda a: a
+            ArrayUtils.to_gpu_copy = lambda a: a.copy()
     
     @staticmethod
     def v2sm(v, pad_value=None):
