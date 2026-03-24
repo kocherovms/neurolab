@@ -30,7 +30,7 @@ class LinearModelUnit(nn.Module):
         self.linear = nn.Linear(
             in_features=input_size, 
             out_features=params.size, 
-            bias=True
+            bias=params.with_bias,
         )
 
         if params.nonlinearity is None:

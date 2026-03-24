@@ -7,6 +7,7 @@ from utils import *
 @dataclass
 class LinearModelUnitParams: 
     size: int = None
+    with_bias: bool = None
     nonlinearity: object = None 
     dropout: object = None
 
@@ -61,14 +62,14 @@ def get_lark_tree_value(tree, var_name, default_value=None):
 def get_lark_tree_values(tree, var_name):
     return list(map(lambda x: x.value, tree.scan_values(lambda i: i is not None and i.type == var_name)))
 
-class ModelUnitsParser:
+class ModelUnitParser:
     def __init__(self):
         grammar = '''
             spec: linear_unit_spec | lstm_unit_spec | conv2d_unit_spec | conv_transpose2d_unit_spec
     
             # LINEAR UNIT
             linear_unit_spec: "Linear" ":" _linear_unit_spec | "Linear" "(" _linear_unit_spec ")"
-            _linear_unit_spec: (dropout_spec "->")? linear_size_spec ("->" nonlinearity_spec)?
+            _linear_unit_spec: (dropout_spec "->")? linear_size_spec BIAS? ("->" nonlinearity_spec)?
             linear_size_spec: expand_var_spec | SIZE
     
             # LSTM UNIT
@@ -151,79 +152,75 @@ class ModelUnitsParser:
         '''
         self.lark_parser = lark.Lark(grammar, start='spec')
 
-    def parse(self, units, expand_vars):
-        params_list = []
+    def parse(self, unit_spec, expand_vars={}):
+        tree = self.lark_parser.parse(unit_spec)
 
-        for unit in units:
-            tree = self.lark_parser.parse(unit)
-    
-            if spec_subtree := list(tree.find_data('linear_unit_spec')):
-                spec_subtree = spec_subtree[0]
-                gtv = lambda var_name, default_value='': get_lark_tree_value(spec_subtree, var_name, default_value)
-                params = LinearModelUnitParams()
-    
-                if t := list(spec_subtree.find_data('expand_var_spec')):
-                    expand_var_name = get_lark_tree_value(t[0], 'IDENTIFIER')
-                    params.size = int(expand_vars[expand_var_name])
-                else:
-                    params.size = int(gtv('SIZE'))
-                    
-                params.nonlinearity = self.create_nonlinearity_params(spec_subtree)
-                params.dropout = self.create_dropout_params(spec_subtree)
-            elif spec_subtree := list(itertools.chain(tree.find_data('conv2d_unit_spec'), tree.find_data('conv_transpose2d_unit_spec'))):
-                spec_subtree = spec_subtree[0]
-                gtv = lambda var_name, default_value='': get_lark_tree_value(spec_subtree, var_name, default_value)
-                params = Conv2dModelUnitParams()
-                params.module = 'Conv2d' if any(spec_subtree.find_data('conv2d_unit_spec')) else 'ConvTranspose2d'
-                coerce_padding = lambda p: p if p in ["valid", "same"] else int(p)
-                params.convolution = Conv2dModelUnitParams.Convolution(
-                    in_channels_count=int(gtv('IN_CHANNELS_COUNT')),
-                    out_channels_count=int(gtv('OUT_CHANNELS_COUNT')),
-                    in_channels_count_per_kernel=int(gtv('IN_CHANNELS_COUNT_PER_KERNEL')),
-                    kernel_size=int(gtv('KERNEL_SIZE')),
-                    with_bias=gtv('BIAS', '') == "+bias",
-                    padding=LangUtils.coalesce_fn(gtv('PADDING', None), coerce_padding, None),
-                    stride=LangUtils.coalesce_fn(gtv('STRIDE', None), int, None),
-                )
-    
-                params.batch_norm2d = self.create_batch_norm2d_params(spec_subtree)
-                params.instance_norm2d = self.create_instance_norm2d_params(spec_subtree)
-                params.nonlinearity = self.create_nonlinearity_params(spec_subtree)
-                params.with_gain = bool(gtv('GAIN', ''))
-                params.rectification = gtv('RECTIFICATION', None)
-                
-                if t := list(spec_subtree.find_data('lcn_spec')):
-                    params.normalization = Conv2dModelUnitParams.Normalization(
-                        norm_method='LCN', 
-                        lcn_window_width=int(get_lark_tree_value(t[0], 'WINDOW_WIDTH')),
-                        lcn_window_sigma=int(get_lark_tree_value(t[0], 'WINDOW_SIGMA')),
-                )
-    
-                if t := list(spec_subtree.find_data('filtered_pool_spec')):
-                    params.pooling = Conv2dModelUnitParams.Pooling(
-                        boxcar_width=int(get_lark_tree_value(t[0], 'WIDTH', 0)),
-                        pool_method=get_lark_tree_value(t[0], 'POOL_METHOD'),
-                        kernel_size=int(get_lark_tree_value(t[0], 'KERNEL_SIZE')),
-                    )
-                
-                if list(spec_subtree.find_data('weights_source_spec')):
-                    params.weights_source = Conv2dModelUnitParams.WeightsSource(
-                        asset_name=gtv('ASSET_NAME'), 
-                        asset_version=gtv('ASSET_VERSION'), 
-                )
-            elif spec_subtree := list(tree.find_data('lstm_unit_spec')):
-                spec_subtree = spec_subtree[0]
-                gtv = lambda var_name, default_value='': get_lark_tree_value(spec_subtree, var_name, default_value)
-                params = StateModelUnitParams()
-                params.module = 'LSTM'
-                params.hidden_size = int(gtv('SIZE'))
-                params.num_layers = int(gtv('COUNT', 1))
+        if spec_subtree := list(tree.find_data('linear_unit_spec')):
+            spec_subtree = spec_subtree[0]
+            gtv = lambda var_name, default_value='': get_lark_tree_value(spec_subtree, var_name, default_value)
+            params = LinearModelUnitParams()
+
+            if t := list(spec_subtree.find_data('expand_var_spec')):
+                expand_var_name = get_lark_tree_value(t[0], 'IDENTIFIER')
+                params.size = int(expand_vars[expand_var_name])
             else:
-                assert False, f'Unsupported unit spec="{unit}"'
-    
-            params_list.append(params)
-    
-        return params_list
+                params.size = int(gtv('SIZE'))
+
+            params.with_bias = gtv('BIAS', '') in ['+bias', '']
+            params.nonlinearity = self.create_nonlinearity_params(spec_subtree)
+            params.dropout = self.create_dropout_params(spec_subtree)
+        elif spec_subtree := list(itertools.chain(tree.find_data('conv2d_unit_spec'), tree.find_data('conv_transpose2d_unit_spec'))):
+            spec_subtree = spec_subtree[0]
+            gtv = lambda var_name, default_value='': get_lark_tree_value(spec_subtree, var_name, default_value)
+            params = Conv2dModelUnitParams()
+            params.module = 'Conv2d' if any(spec_subtree.find_data('conv2d_unit_spec')) else 'ConvTranspose2d'
+            coerce_padding = lambda p: p if p in ["valid", "same"] else int(p)
+            params.convolution = Conv2dModelUnitParams.Convolution(
+                in_channels_count=int(gtv('IN_CHANNELS_COUNT')),
+                out_channels_count=int(gtv('OUT_CHANNELS_COUNT')),
+                in_channels_count_per_kernel=int(gtv('IN_CHANNELS_COUNT_PER_KERNEL')),
+                kernel_size=int(gtv('KERNEL_SIZE')),
+                with_bias=gtv('BIAS', '') == '+bias',
+                padding=LangUtils.coalesce_fn(gtv('PADDING', None), coerce_padding, None),
+                stride=LangUtils.coalesce_fn(gtv('STRIDE', None), int, None),
+            )
+
+            params.batch_norm2d = self.create_batch_norm2d_params(spec_subtree)
+            params.instance_norm2d = self.create_instance_norm2d_params(spec_subtree)
+            params.nonlinearity = self.create_nonlinearity_params(spec_subtree)
+            params.with_gain = bool(gtv('GAIN', ''))
+            params.rectification = gtv('RECTIFICATION', None)
+            
+            if t := list(spec_subtree.find_data('lcn_spec')):
+                params.normalization = Conv2dModelUnitParams.Normalization(
+                    norm_method='LCN', 
+                    lcn_window_width=int(get_lark_tree_value(t[0], 'WINDOW_WIDTH')),
+                    lcn_window_sigma=int(get_lark_tree_value(t[0], 'WINDOW_SIGMA')),
+            )
+
+            if t := list(spec_subtree.find_data('filtered_pool_spec')):
+                params.pooling = Conv2dModelUnitParams.Pooling(
+                    boxcar_width=int(get_lark_tree_value(t[0], 'WIDTH', 0)),
+                    pool_method=get_lark_tree_value(t[0], 'POOL_METHOD'),
+                    kernel_size=int(get_lark_tree_value(t[0], 'KERNEL_SIZE')),
+                )
+            
+            if list(spec_subtree.find_data('weights_source_spec')):
+                params.weights_source = Conv2dModelUnitParams.WeightsSource(
+                    asset_name=gtv('ASSET_NAME'), 
+                    asset_version=gtv('ASSET_VERSION'), 
+            )
+        elif spec_subtree := list(tree.find_data('lstm_unit_spec')):
+            spec_subtree = spec_subtree[0]
+            gtv = lambda var_name, default_value='': get_lark_tree_value(spec_subtree, var_name, default_value)
+            params = StateModelUnitParams()
+            params.module = 'LSTM'
+            params.hidden_size = int(gtv('SIZE'))
+            params.num_layers = int(gtv('COUNT', 1))
+        else:
+            assert False, f'Unsupported unit spec="{unit}"'
+
+        return params
 
     def parse_arg_list(self, t):
         args = list(map(LangUtils.to_number, get_lark_tree_values(t, 'ARG_VALUE')))
@@ -261,8 +258,14 @@ class ModelUnitsParser:
         return None
         
 def hp_parse_model_units(units, expand_vars={}):
-    parser = ModelUnitsParser()
-    return parser.parse(units, expand_vars)
+    parser = ModelUnitParser()
+    params_list = []
+
+    for unit in units:
+        params = parser.parse(unit, expand_vars)
+        params_list.append(params)
+    
+    return params_list
 
 def hp_parse_learn_rate(learn_rate):
     params = LearnRateParams()
