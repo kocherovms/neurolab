@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 
 import optuna
+import optuna.samplers
 from optuna.storages import JournalStorage
 from optuna.storages.journal import JournalFileBackend
 
@@ -85,6 +86,7 @@ class RunOptimizationTask:
     study_name: str
     study_fname: str
     optimize_directions: list
+    grid_search_space: dict
 
 # Launched from under the spawned process
 def run_optimization(task):
@@ -115,5 +117,6 @@ def run_optimization(task):
             directions=task.optimize_directions,
             storage=JournalStorage(JournalFileBackend(file_path=task.study_fname)),
             load_if_exists=True,
+            sampler=optuna.samplers.GridSampler(task.grid_search_space) if task.grid_search_space is not None else None,
         )
         study.optimize(get_objective(module_fname, task.study_serial, task.study_name), n_trials=1)
