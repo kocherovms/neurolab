@@ -102,13 +102,18 @@ class Logging:
 
     def set_log_level(self, sink_name, log_level):
         assert sink_name == 'all' or sink_name in self.sinks
+        old_log_level = None
 
         if sink_name == 'all':
             for sink in self.sinks.values():
+                old_log_level = sink.logger.level
                 sink.logger.setLevel(log_level)
         else:
             sink = self.sinks[sink_name]
+            old_log_level = sink.logger.level
             sink.logger.setLevel(log_level)
+
+        return old_log_level
             
     def prepare_syslog_message(self, s, t, with_duration):
         msg = ' ' # without this space following 'PID:'... will be considered as a part of syslogtag by rsyslog, so separate forcibly

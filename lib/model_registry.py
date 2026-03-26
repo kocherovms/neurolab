@@ -6,12 +6,66 @@ import time
 
 from logging_utils import *
 
+# Receipe for models copy 
+def copy_models():
+    source_model_registry = ModelRegistry('com.develorium.neurovision.denoise')
+    models = source_model_registry.list_models()
+    target_model_registry = ModelRegistry('com.develorium.neurovision.10_denoise')
+    old_log_level = LOG.set_log_level('all', logging.ERROR)
+    
+    try:
+        for model in tqdm(models, desc='Model'):
+            assets = source_model_registry.get_assets(model['name'], model['version'])
+            target_model_registry.register_model(model['name'], model['version'])
+        
+            for asset in tqdm(assets, desc=f'Asset {model['name']}:{model['version']}', leave=False):
+                ext = asset['maven2']['extension']
+                
+                if any(map(lambda x: ext.endswith(x), ('pom', '.md5', '.sha256', '.sha512', '.sha1'))):
+                    continue
+                    
+                content = source_model_registry.get_asset_content(model['name'], model['version'], asset['maven2']['extension'], asset['maven2'].get('classifier', ''))
+                
+                with io.BytesIO(content) as b:
+                    target_model_registry.attach_asset(
+                        model_name=model['name'], 
+                        model_version=model['version'], 
+                        asset_ext=asset['maven2']['extension'], 
+                        asset_classifier=asset['maven2'].get('classifier', ''),
+                        asset=b)
+    finally:
+        LOG.set_log_level('all', old_log_level)    
+
 class ModelRegistry:
     def __init__(self, maven_group_id, nexus_url='http://nexus:8081', nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
         self.maven_group_id = maven_group_id
         self.nexus_url = nexus_url
         self.nexus_auth = nexus_auth
         self.maven_repo = maven_repo
+
+    def list_models(self):
+        query_params = {
+            'group': self.maven_group_id, 
+        }
+        r = requests.get(f'{self.nexus_url}/service/rest/v1/search', params=query_params, auth=self.nexus_auth)
+        r.raise_for_status()
+        r_json = r.json()
+        models = []
+        
+        while True:
+            items = r.json()['items']
+            models.extend(map(lambda item: dict(name=item['name'], version=item['version']), items))
+            continuation_token = r_json.get('continuationToken', '')
+        
+            if not continuation_token:
+                break
+                
+            query_params['continuationToken'] = continuation_token
+            r = requests.get(f'{self.nexus_url}/service/rest/v1/search', params=query_params, auth=self.nexus_auth)
+            r.raise_for_status()
+            r_json = r.json()
+
+        return models
             
     def register_model(self, model_name, model_version):
         query_params = {
@@ -144,5 +198,5 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
             is_classifier_match = lambda a: a['maven2'].get('classifier', '') == asset_classifier # optional match
             filter_func = lambda a: is_ext_match(a) and is_classifier_match(a)
             
-        return list(filter(filter_func, assets))            
-        
+        return list(filter(filter_func, assets))     
+
