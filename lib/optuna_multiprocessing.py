@@ -86,7 +86,7 @@ class RunOptimizationTask:
     study_name: str
     study_fname: str
     optimize_directions: list
-    grid_search_space: dict
+    grid_search_space: dict = None
 
 # Launched from under the spawned process
 def run_optimization(task):
