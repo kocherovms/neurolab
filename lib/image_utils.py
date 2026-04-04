@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import IPython
 from torchvision import datasets
+from utils import *
 
 class UninormScaler:
     def __init__(self, divisor=255.0):
@@ -81,16 +82,17 @@ def preprocess_images(images, preprocessing_method, scaler=None):
 
 ImagePatch = namedtuple('ImagePatch', 'patch image_ind i_off j_off')
 
-def extract_image_patch(images, image_stds, patch_size, image_ind=None, with_std=True):
+def extract_image_patch(images, image_stds, patch_size, image_ind=None, with_std=True, rng=None):
     blind_area = 4
     trials = 1000
-    image_ind = RNG.choice(images.shape[0]) if image_ind is None else image_ind
+    rng = LangUtils.coalesce(rng, np.random.default_rng())
+    image_ind = rng.choice(images.shape[0]) if image_ind is None else image_ind
     image = images[image_ind]
     image_std_thres = image_stds[image_ind] * .1
 
     for _ in range(trials):
-        i_off = blind_area + RNG.choice(image.shape[0] - 2 * blind_area - patch_size)
-        j_off = blind_area + RNG.choice(image.shape[1] - 2 * blind_area - patch_size)
+        i_off = blind_area + rng.choice(image.shape[0] - 2 * blind_area - patch_size)
+        j_off = blind_area + rng.choice(image.shape[1] - 2 * blind_area - patch_size)
         patch = image[i_off:i_off + patch_size, j_off:j_off + patch_size]
         
         if with_std:
