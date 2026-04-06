@@ -1,4 +1,5 @@
 from collections import namedtuple
+import re
 import numpy as np
 
 class BaseSampler:
@@ -69,8 +70,9 @@ class SigmoidRandomSampler(BaseRandomSampler):
         return self.rng.uniform() < threshold
 
 class SpiralSampler(BaseSampler):
-    def __init__(self, common_params, direction, stride=None):
+    def __init__(self, common_params, direction, center='auto', stride=None):
         super().__init__(common_params)
+        self.center = center
         stride = self.patch_size if stride is None else stride
         
         match direction:
@@ -80,7 +82,14 @@ class SpiralSampler(BaseSampler):
         
     def __call__(self, df_encoding):
         df_non_empty_encoding = df_encoding[df_encoding.bfr > 0]
-        start_i, start_j = int(df_non_empty_encoding.center_i.mean()), int(df_non_empty_encoding.center_j.mean())
+        
+        if self.center == 'auto':
+            start_i, start_j = int(df_non_empty_encoding.center_i.mean()), int(df_non_empty_encoding.center_j.mean())
+        else:
+            m = re.match(r'(\d+)\s*,\s*(\d+)', self.center)
+            assert m
+            start_i, start_j = int(m.group(1)), int(m.group(2))
+            
         d = dict(map(lambda row: ((row.center_i, row.center_j), row),  df_encoding.itertuples()))
         seq = []
         cycles_count = 0
