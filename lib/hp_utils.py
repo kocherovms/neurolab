@@ -62,6 +62,13 @@ def get_lark_tree_value(tree, var_name, default_value=None):
 def get_lark_tree_values(tree, var_name):
     return list(map(lambda x: x.value, tree.scan_values(lambda i: i is not None and i.type == var_name)))
 
+def parse_arg_list(t):
+    args = list(map(LangUtils.to_number, get_lark_tree_values(t, 'ARG_VALUE')))
+    kwarg_names = get_lark_tree_values(t, 'KWARG_NAME')
+    kwarg_values = list(map(LangUtils.to_number, get_lark_tree_values(t, 'KWARG_VALUE')))
+    kwargs = dict(zip(kwarg_names, kwarg_values))
+    return args, kwargs
+
 class ModelUnitParser:
     def __init__(self):
         grammar = '''
@@ -124,7 +131,7 @@ class ModelUnitParser:
     
             ### Shared specs
             expand_var_spec: "$" IDENTIFIER
-            IDENTIFIER: LETTER (LETTER|DIGIT|"_")+
+            IDENTIFIER: LETTER (LETTER|DIGIT|"_")*
             EXT_IDENTIFIER: (LETTER|DIGIT|"_"|"-")+
     
             arg_list_spec: (ARG_VALUE ("," ARG_VALUE)* ("," KWARG_NAME "=" KWARG_VALUE)*)? (KWARG_NAME "=" KWARG_VALUE ("," KWARG_NAME "=" KWARG_VALUE)*)?
@@ -222,37 +229,30 @@ class ModelUnitParser:
 
         return params
 
-    def parse_arg_list(self, t):
-        args = list(map(LangUtils.to_number, get_lark_tree_values(t, 'ARG_VALUE')))
-        kwarg_names = get_lark_tree_values(t, 'KWARG_NAME')
-        kwarg_values = list(map(LangUtils.to_number, get_lark_tree_values(t, 'KWARG_VALUE')))
-        kwargs = dict(zip(kwarg_names, kwarg_values))
-        return args, kwargs
-
     def create_dropout_params(self, tree):
         if t := list(tree.find_data('dropout_spec')):
-            args, kwargs = self.parse_arg_list(t[0])
+            args, kwargs = parse_arg_list(t[0])
             return OrdinaryParams(args=args, kwargs=kwargs)
 
         return None
     
     def create_nonlinearity_params(self, tree):
         if t := list(tree.find_data('nonlinearity_spec')):
-            args, kwargs = self.parse_arg_list(t[0])
+            args, kwargs = parse_arg_list(t[0])
             return NonlinearityParams(module=get_lark_tree_value(t[0], 'NONLINEARITY'), args=args, kwargs=kwargs)
 
         return None
 
     def create_batch_norm2d_params(self, tree):
         if t := list(tree.find_data('batch_norm2d_spec')):
-            args, kwargs = self.parse_arg_list(t[0])
+            args, kwargs = parse_arg_list(t[0])
             return OrdinaryParams(args=args, kwargs=kwargs)
 
         return None
 
     def create_instance_norm2d_params(self, tree):
         if t := list(tree.find_data('instance_norm2d_spec')):
-            args, kwargs = self.parse_arg_list(t[0])
+            args, kwargs = parse_arg_list(t[0])
             return OrdinaryParams(args=args, kwargs=kwargs)
 
         return None
