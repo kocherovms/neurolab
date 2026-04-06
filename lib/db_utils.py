@@ -13,6 +13,14 @@ def is_table_empty(db_con, table_name):
     cur = db_con.cursor() 
     return len(cur.execute(f'SELECT * FROM {table_name} LIMIT 1').fetchall()) < 1
 
+def get_rows_count(db_con, table_name):
+    cur = db_con.cursor() 
+    return cur.execute(f'SELECT COUNT(*) FROM {table_name}').fetchone()[0]
+
+def get_max_value(db_con, table_name, column_name):
+    cur = db_con.cursor()
+    return cur.execute(f'SELECT MAX({column_name}) FROM {table_name}').fetchone()[0]
+
 def drop_table_safe(db_con, tn):
     if is_table_exists(db_con, tn):
         db_con.cursor().execute(f'DROP TABLE {tn}')

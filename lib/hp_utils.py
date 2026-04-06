@@ -62,10 +62,18 @@ def get_lark_tree_value(tree, var_name, default_value=None):
 def get_lark_tree_values(tree, var_name):
     return list(map(lambda x: x.value, tree.scan_values(lambda i: i is not None and i.type == var_name)))
 
+def to_basic_type(v):
+    assert isinstance(v, str)
+
+    if v.startswith('"'):
+        return v.strip('"')
+
+    return LangUtils.to_number(v)
+
 def parse_arg_list(t):
-    args = list(map(LangUtils.to_number, get_lark_tree_values(t, 'ARG_VALUE')))
+    args = list(map(to_basic_type, get_lark_tree_values(t, 'ARG_VALUE')))
     kwarg_names = get_lark_tree_values(t, 'KWARG_NAME')
-    kwarg_values = list(map(LangUtils.to_number, get_lark_tree_values(t, 'KWARG_VALUE')))
+    kwarg_values = list(map(to_basic_type, get_lark_tree_values(t, 'KWARG_VALUE')))
     kwargs = dict(zip(kwarg_names, kwarg_values))
     return args, kwargs
 
@@ -135,9 +143,9 @@ class ModelUnitParser:
             EXT_IDENTIFIER: (LETTER|DIGIT|"_"|"-")+
     
             arg_list_spec: (ARG_VALUE ("," ARG_VALUE)* ("," KWARG_NAME "=" KWARG_VALUE)*)? (KWARG_NAME "=" KWARG_VALUE ("," KWARG_NAME "=" KWARG_VALUE)*)?
-            ARG_VALUE: NUMBER
+            ARG_VALUE: NUMBER | ESCAPED_STRING
             KWARG_NAME: IDENTIFIER
-            KWARG_VALUE: NUMBER
+            KWARG_VALUE: NUMBER | ESCAPED_STRING
     
             ### Shared types
             SIZE: INT
@@ -148,7 +156,8 @@ class ModelUnitParser:
             BIAS: "+bias" | "-bias"
             GAIN: "gain"
             RECTIFICATION: WORD
-            
+
+            %import common.ESCAPED_STRING
             %import common.LETTER
             %import common.WORD
             %import common.DIGIT
