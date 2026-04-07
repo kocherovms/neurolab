@@ -150,6 +150,13 @@ class LangUtils:
         return v
 
     @staticmethod
+    def when(v, if_true, if_false):
+        if v:
+            return if_true
+        else:
+            return if_false
+
+    @staticmethod
     def to_number(v):
         assert isinstance(v, str)
         

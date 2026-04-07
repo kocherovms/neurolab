@@ -1,6 +1,10 @@
 from collections import namedtuple
+from dataclasses import dataclass
 import re
 import numpy as np
+import lark
+import hp_utils
+from utils import *
 
 class BaseSampler:
     CommonParams = namedtuple('CommonParams', 'spec image_size patch_size max_seq_length rng')
@@ -171,3 +175,45 @@ class ZigzagSampler(BaseSampler):
                 break
 
         return np.array(seq, dtype=int), cycles_count
+
+@dataclass
+class SamplerParams:
+    spec: str = None
+    class_name: str = None
+    args: list = None
+    kwargs: dict = None
+    
+def hp_parse_samplers(samplers, save_spec=True):
+    grammar = '''
+        spec: SAMPLER_CLASS_NAME ( "(" arg_list_spec ")" )?
+        SAMPLER_CLASS_NAME: IDENTIFIER
+    
+        arg_list_spec: (ARG_VALUE ("," ARG_VALUE)* ("," KWARG_NAME "=" KWARG_VALUE)*)? (KWARG_NAME "=" KWARG_VALUE ("," KWARG_NAME "=" KWARG_VALUE)*)?
+        ARG_VALUE: NUMBER | ESCAPED_STRING 
+        KWARG_NAME: IDENTIFIER
+        KWARG_VALUE: NUMBER | ESCAPED_STRING
+        IDENTIFIER: LETTER (LETTER|DIGIT|"_")*
+
+        %import common.ESCAPED_STRING
+        %import common.LETTER
+        %import common.DIGIT
+        %import common.NUMBER
+        %import common.INT
+        %import common.WS
+        %ignore WS
+    '''
+    lark_parser = lark.Lark(grammar, start='spec')
+    params_list = []
+
+    for sampler in samplers:
+        tree = lark_parser.parse(sampler)
+        args, kwargs = hp_utils.parse_arg_list(tree)
+        sampler_params = SamplerParams(
+            spec=LangUtils.when(save_spec, sampler, None), 
+            class_name=hp_utils.get_lark_tree_value(tree, 'SAMPLER_CLASS_NAME'), 
+            args=args, 
+            kwargs=kwargs
+        )
+        params_list.append(sampler_params)
+
+    return params_list
