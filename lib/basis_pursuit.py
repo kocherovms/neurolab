@@ -8,29 +8,40 @@ from utils import *
 # Хотим, найти только один, но самый лучший базис. Т.е. что-то типа победитель забирает все (winner takes it all)
 # X - patches as rows
 # W - bases as columns, we don't expect anything on W (i.e. no orthogonality, normality and so on)
-def bp_batch_solo(X, W):
+def bp_batch_solo(X, W, return_loss_matrix=False):
     # Use broadcasting to get differences
     diff = einops.rearrange(X, 'n d -> n 1 d') - einops.rearrange(W, 'd m -> 1 m d')
     
     if isinstance(diff, torch.Tensor):
         loss_matrix = torch.mean(diff**2, dim=2)
+
+        if return_loss_matrix:
+            return loss_matrix
+        
         best_inds = torch.argmin(loss_matrix, dim=1, keepdim=True)
-        Z = torch.zeros_like(loss_matrix).scatter_(1, best_inds, 1.0)
+        Z = torch.zeros_like(loss_matrix).scatter_(1, best_inds, 1.0) # matrix of OHE-rows
     elif isinstance(diff, np.ndarray):
         loss_matrix = (diff ** 2).mean(axis=2)
+        
+        if return_loss_matrix:
+            return loss_matrix
+            
         best_inds = np.argmin(loss_matrix, axis=1)
         Z = np.zeros_like(loss_matrix)
-        Z[np.arange(loss_matrix.shape[0]), best_inds] = 1
+        Z[np.arange(loss_matrix.shape[0]), best_inds] = 1 # matrix of OHE-rows
     elif isinstance(diff, cp.ndarray):
         loss_matrix = (diff ** 2).mean(axis=2)
+
+        if return_loss_matrix:
+            return loss_matrix
+            
         best_inds = cp.argmin(loss_matrix, axis=1)
         Z = cp.zeros_like(loss_matrix)
-        Z[cp.arange(loss_matrix.shape[0]), best_inds] = 1
+        Z[cp.arange(loss_matrix.shape[0]), best_inds] = 1 # matrix of OHE-rows
     else:
         assert False, f'Unsupported {type(diff)=}'
 
     return Z
-
 
 # W = matrix, wich each column is a basis
 def bp_ista(x, W, init_z, pred_z, rho=0.5, gamma=0.1, L=1, iters_count=300):
