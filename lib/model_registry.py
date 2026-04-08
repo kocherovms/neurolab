@@ -7,9 +7,9 @@ import time
 from logging_utils import *
 
 # Receipe for models copy 
-def copy_models():
+def copy_models_to_new_group():
     source_model_registry = ModelRegistry('com.develorium.neurovision.denoise')
-    models = source_model_registry.list_models()
+    models = source_model_registry.list_models() # aka components in maven
     target_model_registry = ModelRegistry('com.develorium.neurovision.10_denoise')
     old_log_level = LOG.set_log_level('all', logging.ERROR)
     
