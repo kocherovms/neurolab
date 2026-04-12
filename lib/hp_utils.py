@@ -67,6 +67,8 @@ def to_basic_type(v):
 
     if v.startswith('"'):
         return v.strip('"')
+    elif v == "None":
+        return None
 
     return LangUtils.to_number(v)
 
