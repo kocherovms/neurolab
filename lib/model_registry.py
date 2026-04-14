@@ -4,42 +4,14 @@ import string
 import requests
 import time
 
+from utils import *
 from logging_utils import *
 
-# Receipe for models copy 
-def copy_models_to_new_group():
-    source_model_registry = ModelRegistry('com.develorium.neurovision.denoise')
-    models = source_model_registry.list_models() # aka components in maven
-    target_model_registry = ModelRegistry('com.develorium.neurovision.10_denoise')
-    old_log_level = LOG.set_log_level('all', logging.ERROR)
-    
-    try:
-        for model in tqdm(models, desc='Model'):
-            assets = source_model_registry.get_assets(model['name'], model['version'])
-            target_model_registry.register_model(model['name'], model['version'])
-        
-            for asset in tqdm(assets, desc=f'Asset {model['name']}:{model['version']}', leave=False):
-                ext = asset['maven2']['extension']
-                
-                if any(map(lambda x: ext.endswith(x), ('pom', '.md5', '.sha256', '.sha512', '.sha1'))):
-                    continue
-                    
-                content = source_model_registry.get_asset_content(model['name'], model['version'], asset['maven2']['extension'], asset['maven2'].get('classifier', ''))
-                
-                with io.BytesIO(content) as b:
-                    target_model_registry.attach_asset(
-                        model_name=model['name'], 
-                        model_version=model['version'], 
-                        asset_ext=asset['maven2']['extension'], 
-                        asset_classifier=asset['maven2'].get('classifier', ''),
-                        asset=b)
-    finally:
-        LOG.set_log_level('all', old_log_level)    
-
 class ModelRegistry:
-    def __init__(self, maven_group_id, nexus_url='http://nexus:8081', nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
+    def __init__(self, maven_group_id, nexus_url='http://nexus:8081', download_nexus_url=None, nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
         self.maven_group_id = maven_group_id
         self.nexus_url = nexus_url
+        self.download_nexus_url = LangUtils.coalesce(download_nexus_url, self.nexus_url)
         self.nexus_auth = nexus_auth
         self.maven_repo = maven_repo
 
@@ -171,8 +143,13 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
         if not assets:
             raise Exception(f'Failed to locate asset {self.describe_asset(asset_ext, asset_classifier)} for {self.maven_group_id}.{model_name}:{model_version}')
 
-        Logging.debug(f'Downloading {assets[0]['downloadUrl']} for asset with id={assets[0]['id']}')
-        r = requests.get(assets[0]['downloadUrl'])
+        # By default artifact is available for download via `assets[0]['downloadUrl']`. But we would consturct
+        # download URL manually in order to benefit from caching nexus repo (if present, OFC)
+        download_url  = self.download_nexus_url + LangUtils.when(self.download_nexus_url.endswith('/'), '', '/') 
+        download_url += f'repository/{self.maven_repo}/'
+        download_url += assets[0]['path']
+        Logging.debug(f'Downloading {download_url} for asset with id={assets[0]['id']}')
+        r = requests.get(download_url)
         r.raise_for_status()
         return r.content
 
