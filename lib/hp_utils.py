@@ -53,6 +53,11 @@ class LearnRateParams:
     learn_rate: float = None
     plateau: object = None
 
+@dataclass
+class ArtifactSourceParams:
+    model_name: str = None
+    model_version: str = None
+
 def get_lark_tree_value(tree, var_name, default_value=None):
     try:
         return next(tree.scan_values(lambda i: i is not None and i.type == var_name)).value
@@ -315,4 +320,27 @@ def hp_parse_learn_rate(learn_rate):
             patience=int(gtv('PLATEAU_PATIENCE_VALUE', 10)),
         )
 
+    return params
+
+def hp_parse_artifact_source(source):
+    params = ArtifactSourceParams()
+
+    grammar = '''
+        spec: MODEL_NAME ":" MODEL_VERSION
+
+        MODEL_NAME: EXT_IDENTIFIER
+        MODEL_VERSION: EXT_IDENTIFIER
+        EXT_IDENTIFIER: (LETTER|DIGIT|"_"|"-")+
+
+        %import common.LETTER
+        %import common.DIGIT
+        %import common.WS
+        %ignore WS
+    '''
+    parser = lark.Lark(grammar, start='spec')
+    tree = parser.parse(source)
+    gtv = lambda var_name, default_value='': get_lark_tree_value(tree, var_name, default_value)
+    params = ArtifactSourceParams()
+    params.model_name = gtv('MODEL_NAME')
+    params.model_version = gtv('MODEL_VERSION')
     return params

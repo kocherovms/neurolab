@@ -146,8 +146,8 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
         # By default artifact is available for download via `assets[0]['downloadUrl']`. But we would consturct
         # download URL manually in order to benefit from caching nexus repo (if present, OFC)
         download_url  = self.download_nexus_url + LangUtils.when(self.download_nexus_url.endswith('/'), '', '/') 
-        download_url += f'repository/{self.maven_repo}/'
-        download_url += assets[0]['path']
+        download_url += f'repository/{self.maven_repo}'
+        download_url += LangUtils.when(assets[0]['path'].startswith('/'), '', '/') + assets[0]['path']
         Logging.debug(f'Downloading {download_url} for asset with id={assets[0]['id']}')
         r = requests.get(download_url)
         r.raise_for_status()

@@ -17,6 +17,7 @@ class NoncausalTransformer(nn.Module):
     
     def __init__(self, params):
         super().__init__()
+        self.params = params
         self.vocab_embedding = nn.Embedding(params.vocab_size, params.embedding_size)
         self.pos_embedding = nn.Embedding(params.pos_tokens_count, params.embedding_size)
         encoder_layer = nn.TransformerEncoderLayer(
