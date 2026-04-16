@@ -8,34 +8,45 @@ from utils import *
 # Хотим, найти только один, но самый лучший базис. Т.е. что-то типа победитель забирает все (winner takes it all)
 # X - patches as rows
 # W - bases as columns, we don't expect anything on W (i.e. no orthogonality, normality and so on)
-def bp_batch_solo(X, W, return_loss_matrix=False):
+def bp_batch_solo(X, W, result_type='OHE'):
     # Use broadcasting to get differences
     diff = einops.rearrange(X, 'n d -> n 1 d') - einops.rearrange(W, 'd m -> 1 m d')
     
     if isinstance(diff, torch.Tensor):
         loss_matrix = torch.mean(diff**2, dim=2)
 
-        if return_loss_matrix:
+        if result_type == 'loss_matrix':
             return loss_matrix
+        
+        if result_type == 'scalar':
+            return torch.argmin(loss_matrix, dim=1, keepdim=False)
         
         best_inds = torch.argmin(loss_matrix, dim=1, keepdim=True)
         Z = torch.zeros_like(loss_matrix).scatter_(1, best_inds, 1.0) # matrix of OHE-rows
     elif isinstance(diff, np.ndarray):
         loss_matrix = (diff ** 2).mean(axis=2)
         
-        if return_loss_matrix:
+        if result_type == 'loss_matrix':
             return loss_matrix
             
         best_inds = np.argmin(loss_matrix, axis=1)
+
+        if result_type == 'scalar':
+            return best_inds
+        
         Z = np.zeros_like(loss_matrix)
         Z[np.arange(loss_matrix.shape[0]), best_inds] = 1 # matrix of OHE-rows
     elif isinstance(diff, cp.ndarray):
         loss_matrix = (diff ** 2).mean(axis=2)
 
-        if return_loss_matrix:
+        if result_type == 'loss_matrix':
             return loss_matrix
             
         best_inds = cp.argmin(loss_matrix, axis=1)
+
+        if result_type == 'scalar':
+            return best_inds
+            
         Z = cp.zeros_like(loss_matrix)
         Z[cp.arange(loss_matrix.shape[0]), best_inds] = 1 # matrix of OHE-rows
     else:
