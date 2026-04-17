@@ -73,6 +73,7 @@ class SigmoidRandomSampler(BaseRandomSampler):
         threshold = 1 / (1 + np.exp(self.k * (-bfr + self.b)))
         return self.rng.uniform() < threshold
 
+# https://share.google/aimode/LXBC27izsszJBxKB0
 class SpiralSampler(BaseSampler):
     def __init__(self, common_params, direction, center='auto', stride=None):
         super().__init__(common_params)

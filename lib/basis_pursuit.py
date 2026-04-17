@@ -9,7 +9,7 @@ from utils import *
 # X - patches as rows
 # W - bases as columns, we don't expect anything on W (i.e. no orthogonality, normality and so on)
 def bp_batch_solo(X, W, result_type='OHE'):
-    # Use broadcasting to get differences
+    # Use broadcasting to get differences, https://share.google/aimode/NtUOo4LJlF8NxLSJZ
     diff = einops.rearrange(X, 'n d -> n 1 d') - einops.rearrange(W, 'd m -> 1 m d')
     
     if isinstance(diff, torch.Tensor):
