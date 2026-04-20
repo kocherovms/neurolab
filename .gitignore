@@ -4,5 +4,6 @@ __pycache__/
 build/
 dist/
 log/
+data/
 run/
 *-launch*.ipynb

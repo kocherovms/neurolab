@@ -8,7 +8,7 @@ from utils import *
 from logging_utils import *
 
 class ModelRegistry:
-    def __init__(self, maven_group_id, nexus_url='http://nexus:8081', download_nexus_url=None, nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
+    def __init__(self, maven_group_id, nexus_url='http://nexus:8081', download_nexus_url='http://nexus-slave:8081', nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
         self.maven_group_id = maven_group_id
         self.nexus_url = nexus_url
         self.download_nexus_url = LangUtils.coalesce(download_nexus_url, self.nexus_url)
