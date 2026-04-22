@@ -24,7 +24,7 @@ class Autoincrement:
         self.verbosity = verbosity
         self.result = None
 
-    def __call__(self, key):
+    def __call__(self, request):
         self.result = None
         properties = pika.spec.BasicProperties(
             reply_to=RMQ_MAGIC_REPLY_QUEUE_NAME, 
@@ -33,7 +33,7 @@ class Autoincrement:
         self.channel.basic_publish(
             exchange='', 
             routing_key=RMQ_AUTOINCREMENT_REQUESTS_QUEUE_NAME, 
-            body=key.encode(),
+            body=json.dumps(request).encode(),
             properties=properties)
         self.channel.start_consuming()
         
@@ -43,14 +43,28 @@ class Autoincrement:
 
     def on_reply(self, ch, method, properties, body):
         if_verbose(self.verbosity, 3, lambda: print(f'on_reply: {method=}, {properties=}, len(body)={len(body)}'))
-        if_verbose(self.verbosity, 1, lambda: print(f'Generated autoincrement={body.decode()}'))
+        if_verbose(self.verbosity, 1, lambda: print(f'Response={body.decode()}'))
         self.result = body.decode()
         self.channel.close()
 
     @staticmethod
+    def list(rmq_connection_url=RMQ_DEFAULT_CONNECTION_URL, verbosity=0):
+        client = Autoincrement(rmq_connection_url, verbosity=verbosity)
+        request = dict(method='list')
+        keys = client(request)
+        return json.loads(keys)
+
+    @staticmethod
     def get(key, rmq_connection_url=RMQ_DEFAULT_CONNECTION_URL, verbosity=0):
         client = Autoincrement(rmq_connection_url, verbosity=verbosity)
-        return client(key)
+        request = dict(method='get', key=key)
+        return client(request)
+
+    @staticmethod
+    def set(key, value, rmq_connection_url=RMQ_DEFAULT_CONNECTION_URL, verbosity=0):
+        client = Autoincrement(rmq_connection_url, verbosity=verbosity)
+        request = dict(method='set', key=key, value=value)
+        return client(request)
 
 class AutoincrementServer:
     def __init__(self, storage_fname, rmq_connection_url, verbosity=0):
@@ -92,12 +106,38 @@ class AutoincrementServer:
         if_verbose(self.verbosity, 3, lambda: print(f'on_message: method={method}, properties={properties}, len(body)={len(body)}'))
         reply_to = properties.reply_to
 
-        key = body.decode()
-        if_verbose(self.verbosity, 2, lambda: print(f'Generating autoincrement for {key=}'))
-        self.autoincs[key] += 1
-        if_verbose(self.verbosity, 2, lambda: print(f'Generated autoincrement for {key=} is {self.autoincs[key]}'))
-
-        if self.storage_fname:
+        is_dirty = False
+        
+        try:
+            request = json.loads(body.decode())
+    
+            match request['method']:
+                case 'list':
+                    if_verbose(self.verbosity, 2, lambda: print(f'Listing keys'))
+                    result = json.dumps(list(self.autoincs.keys()))
+                    if_verbose(self.verbosity, 2, lambda: print(f'Returning {len(self.autoincs)} keys'))
+                case 'get':
+                    key = request['key']
+                    if_verbose(self.verbosity, 2, lambda: print(f'Generating autoincrement for {key=}'))
+                    self.autoincs[key] += 1
+                    result = str(self.autoincs[key])
+                    if_verbose(self.verbosity, 2, lambda: print(f'Generated autoincrement for {key=} is {self.autoincs[key]}'))
+                    is_dirty = True
+                case 'set':
+                    key = request['key']
+                    value = int(request['value'])
+                    if_verbose(self.verbosity, 2, lambda: print(f'Setting autoincrement for {key=} to {value}'))
+                    self.autoincs[key] = value
+                    result = str(self.autoincs[key])
+                    if_verbose(self.verbosity, 2, lambda: print(f'Set autoincrement for {key=} to {self.autoincs[key]}'))
+                    is_dirty = True
+                case _:
+                    assert False, f'Unsupported {request['method']=}'
+        except Exception as ex: 
+            result = 'error'
+            if_verbose(self.verbosity, 0, lambda: print(f'Failed to handle request "{body.decode()[:1000]}": {str(ex)}'))
+        
+        if self.storage_fname and is_dirty:
             with open(self.storage_fname, 'w') as f:
                 json.dump(self.autoincs, f)
                 if_verbose(self.verbosity, 1, lambda: print(f'Saved {len(self.autoincs)} keys to "{self.storage_fname}"'))
@@ -108,7 +148,7 @@ class AutoincrementServer:
         self.channel.basic_publish(
             exchange='', 
             routing_key=reply_to, 
-            body=str(self.autoincs[key]).encode(),
+            body=result.encode(),
             properties=properties)
         
         ch.basic_ack(delivery_tag=method.delivery_tag)

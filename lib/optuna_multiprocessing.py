@@ -10,7 +10,7 @@ from optuna.storages.journal import JournalFileBackend
 
 from logging_utils import *
 from autoincrement import Autoincrement
-import model_registry
+import artifact_registry
 import launchit
 
 def importstr(module_str, from_=None):
@@ -95,8 +95,8 @@ def run_optimization(task):
     
     model_version = int(Autoincrement.get(f'{task.model_group_uri}.{task.model_name}'))
     assert model_version > 0, model_version
-    model_registry_obj = model_registry.ModelRegistry(task.model_group_uri)
-    model_registry_obj.register_model(task.model_name, model_version)
+    artifact_registry_obj = artifact_registry.ArtifactRegistry(task.model_group_uri)
+    artifact_registry_obj.register_componentl(task.model_name, model_version)
     Logging.info(f'Model instance registered, version={model_version}')
 
     with Logging.get().auto_prefix('MVER', model_version):
