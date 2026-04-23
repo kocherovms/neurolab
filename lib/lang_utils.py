@@ -1,0 +1,32 @@
+
+def from_str(cast_func, s, default_value):
+    try:
+        return cast_func(s)
+    except ValueError:
+        return default_value
+
+def coalesce_fn(v, fn, default_value):
+    if v is None:
+        return default_value
+
+    return fn(v)
+
+def coalesce(v, default_value):
+    if v is None:
+        return default_value
+
+    return v
+
+def when(v, if_true, if_false):
+    if v:
+        return if_true() if collable(if_true) else if_true
+    else:
+        return if_false() if collable(if_false) else if_false
+
+def to_number(v):
+    assert isinstance(v, str)
+    
+    if '.' in v:
+        return float(v)
+    else:
+        return int(v)
