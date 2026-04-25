@@ -1,0 +1,3 @@
+[submodule "lib/cleanrl"]
+	path = lib/cleanrl
+	url = https://github.com/vwxyzjn/cleanrl.git

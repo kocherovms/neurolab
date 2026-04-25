@@ -20,6 +20,9 @@ def init(is_cuda=None):
         to_gpu = lambda a: a
         to_gpu_copy = lambda a: a.copy()
 
+def indices(list_like):
+    return np.arange(len(list_like))
+
 def v2sm(v, pad_value=None):
     assert v.ndim == 1
     root = np.sqrt(v.shape[0])

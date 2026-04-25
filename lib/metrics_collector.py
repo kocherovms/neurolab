@@ -73,6 +73,22 @@ class RmqSummaryWriter(RmqSummaryBase):
             pickle.dump(image, b)
             self._robust_publish(body=b.getvalue(), properties=properties)
 
+    def add_video(self, tag, vid_tensor, global_step=None, fps=4, walltime=None):
+        properties = self._create_message_properties('add_video')
+        properties.headers['tag'] = tag
+
+        if global_step is not None:
+            properties.headers['global_step'] = str(global_step)
+            
+        properties.headers['fps'] = str(fps)
+
+        if walltime is not None:
+            properties.headers['walltime'] = str(walltime)
+
+        with io.BytesIO() as b:
+            torch.save(vid_tensor, b)
+            self._robust_publish(body=b.getvalue(), properties=properties)
+
     def add_hparams(self, hparam_dict, metric_dict, run_name):
         properties = self._create_message_properties('add_hparams')
         properties.headers['run_name'] = run_name
@@ -157,7 +173,16 @@ class RmqSummaryCollector(RmqSummaryBase):
                 with io.BytesIO(body) as b:
                     image_data = pickle.load(b)
                     self.get_summary_writer(log_dir).add_image(tag, image_data, global_step)
-                    print(f'add_figure, log_dir={log_dir},  tag={tag}, shape(image_data)={image_data.shape}, global_step={global_step}')
+                    print(f'add_figure, log_dir={log_dir}, tag={tag}, shape(image_data)={image_data.shape}, global_step={global_step}')
+            case 'add_video':
+                with io.BytesIO(body) as b:
+                    vid_tensor = torch.load(b)
+                    fps = properties.headers.get('fps', None)
+                    fps = lu.when(fps, lambda: float(fps), None)
+                    walltime = properties.headers.get('walltime', None)
+                    walltime = lu.when(walltime, lambda: float(walltime), None)
+                    self.get_summary_writer(log_dir).add_video(tag, vid_tensor, global_step, fps, walltime)
+                    print(f'add_video, {log_dir=}, {tag=}, {vid_tensor.shape=}, {global_step=}, {fps=}, {walltime=}')
             case 'add_hparams':
                 with io.BytesIO(body) as b:
                     message = json.load(b)

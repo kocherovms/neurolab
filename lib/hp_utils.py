@@ -2,7 +2,8 @@ from collections import namedtuple
 from dataclasses import dataclass
 import itertools
 import lark
-from utils import *
+
+import lang_utils as lu
 
 @dataclass
 class LinearModelUnitParams: 
@@ -49,9 +50,11 @@ class OrdinaryParams:
 @dataclass
 class LearnRateParams: 
     Plateau = namedtuple('Plateau', 'factor patience')
+    Linear = namedtuple('Linear', 'start_factor end_factor')
     
     learn_rate: float = None
     plateau: object = None
+    linear: object = None
 
 @dataclass
 class ArtifactSourceParams:
@@ -75,7 +78,7 @@ def to_basic_type(v):
     elif v == "None":
         return None
 
-    return LangUtils.to_number(v)
+    return lu.to_number(v)
 
 def parse_arg_list(t):
     args = list(map(to_basic_type, get_lark_tree_values(t, 'ARG_VALUE')))
@@ -204,8 +207,8 @@ class ModelUnitParser:
                 in_channels_count_per_kernel=int(gtv('IN_CHANNELS_COUNT_PER_KERNEL')),
                 kernel_size=int(gtv('KERNEL_SIZE')),
                 with_bias=gtv('BIAS', '') == '+bias',
-                padding=LangUtils.coalesce_fn(gtv('PADDING', None), coerce_padding, None),
-                stride=LangUtils.coalesce_fn(gtv('STRIDE', None), int, None),
+                padding=lu.coalesce_fn(gtv('PADDING', None), coerce_padding, None),
+                stride=lu.coalesce_fn(gtv('STRIDE', None), int, None),
             )
 
             params.batch_norm2d = self.create_batch_norm2d_params(spec_subtree)
@@ -291,19 +294,17 @@ def hp_parse_learn_rate(learn_rate):
         return params
         
     grammar = '''
-        spec: initial_lr_spec(","plateau_spec)?
+        spec: INITIAL_LR ("," (plateau_spec | linear_spec))?
     
-        initial_lr_spec: INITIAL_LR
         INITIAL_LR: NUMBER
     
-        plateau_spec: "plateau" "(" (|plateau_params_spec ("," plateau_params_spec)*) ")"
-        plateau_params_spec: plateau_factor_spec | plateau_patience_spec
-        plateau_factor_spec: "factor" "=" plateau_factor_value_spec
-        plateau_factor_value_spec: PLATEAU_FACTOR_VALUE
-        plateau_patience_spec: "patience" "=" plateau_patience_value_spec
-        plateau_patience_value_spec: PLATEAU_PATIENCE_VALUE
-        PLATEAU_FACTOR_VALUE: NUMBER
-        PLATEAU_PATIENCE_VALUE: NUMBER
+        plateau_spec: "plateau" "(" (PKWARG_NAME "=" KWARG_VALUE ("," PKWARG_NAME "=" KWARG_VALUE)*)? ")"
+        PKWARG_NAME: "factor" | "patience"
+    
+        linear_spec: "linear" "(" (LKWARG_NAME "=" KWARG_VALUE ("," LKWARG_NAME "=" KWARG_VALUE)*)? ")"
+        LKWARG_NAME: "start_factor" | "end_factor"
+    
+        KWARG_VALUE: NUMBER
         
         %import common.NUMBER
         %import common.WS
@@ -314,10 +315,23 @@ def hp_parse_learn_rate(learn_rate):
     gtv = lambda var_name, default_value='': get_lark_tree_value(tree, var_name, default_value)
     params.learn_rate = float(gtv('INITIAL_LR'))
     
-    if list(tree.find_data('plateau_spec')):
+    if t := list(tree.find_data('plateau_spec')):
+        kwarg_names = get_lark_tree_values(t[0], 'PKWARG_NAME')
+        kwarg_values = list(map(to_basic_type, get_lark_tree_values(t[0], 'KWARG_VALUE')))
+        assert len(kwarg_names) == len(kwarg_values)
+        d = dict(zip(kwarg_names, kwarg_values))
         params.plateau = LearnRateParams.Plateau(
-            factor=float(gtv('PLATEAU_FACTOR_VALUE', 0.1)),
-            patience=int(gtv('PLATEAU_PATIENCE_VALUE', 10)),
+            factor=float(lu.coalesce(d.get('factor'), 0.1)),
+            patience=float(lu.coalesce(d.get('patience'), 10)),
+        )
+    elif t := list(tree.find_data('linear_spec')):
+        kwarg_names = get_lark_tree_values(t[0], 'LKWARG_NAME')
+        kwarg_values = list(map(to_basic_type, get_lark_tree_values(t[0], 'KWARG_VALUE')))
+        assert len(kwarg_names) == len(kwarg_values)
+        d = dict(zip(kwarg_names, kwarg_values))
+        params.linear = LearnRateParams.Linear(
+            start_factor=float(lu.coalesce(d.get('start_factor'), 1)),
+            end_factor=float(lu.coalesce(d.get('end_factor'), 0)),
         )
 
     return params
@@ -344,3 +358,40 @@ def hp_parse_artifact_source(source):
     params.model_name = gtv('MODEL_NAME')
     params.model_version = gtv('MODEL_VERSION')
     return params
+
+def hp_parse_arg_list(arg_list):
+    grammar = '''
+        spec: (ARG_VALUE ("," ARG_VALUE)* ("," KWARG_NAME "=" KWARG_VALUE)*)? (KWARG_NAME "=" KWARG_VALUE ("," KWARG_NAME "=" KWARG_VALUE)*)?
+        IDENTIFIER: LETTER (LETTER|DIGIT|"_")*
+        ARG_VALUE: NUMBER | ESCAPED_STRING | "None"
+        KWARG_NAME: IDENTIFIER
+        KWARG_VALUE: NUMBER | ESCAPED_STRING | "None"
+
+        %import common.ESCAPED_STRING
+        %import common.LETTER
+        %import common.DIGIT
+        %import common.NUMBER
+        %import common.WS
+        %ignore WS
+    '''
+    parser = lark.Lark(grammar, start='spec')
+    tree = parser.parse(arg_list)
+    return parse_arg_list(tree)
+
+def hp_parse_kwargs(kwargs):
+    grammar = '''
+        spec: (KWARG_NAME "=" KWARG_VALUE ("," KWARG_NAME "=" KWARG_VALUE)*)?
+        IDENTIFIER: LETTER (LETTER|DIGIT|"_")*
+        KWARG_NAME: IDENTIFIER
+        KWARG_VALUE: NUMBER | ESCAPED_STRING | "None"
+
+        %import common.ESCAPED_STRING
+        %import common.LETTER
+        %import common.DIGIT
+        %import common.NUMBER
+        %import common.WS
+        %ignore WS
+    '''
+    parser = lark.Lark(grammar, start='spec')
+    tree = parser.parse(kwargs)
+    return parse_arg_list(tree)[1]

@@ -4,14 +4,14 @@ import string
 import requests
 import time
 
-from utils import *
+import lang_utils as lu
 from logging_utils import *
 
 class ArtifactRegistry:
     def __init__(self, maven_group_id, nexus_url='http://nexus:8081', download_nexus_url='http://nexus-slave:8081', nexus_auth=('bot', 'bot'), maven_repo='model-registry'):
         self.maven_group_id = maven_group_id
         self.nexus_url = nexus_url
-        self.download_nexus_url = LangUtils.coalesce(download_nexus_url, self.nexus_url)
+        self.download_nexus_url = lu.coalesce(download_nexus_url, self.nexus_url)
         self.nexus_auth = nexus_auth
         self.maven_repo = maven_repo
 
@@ -145,9 +145,9 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
 
         # By default artifact is available for download via `assets[0]['downloadUrl']`. But we would consturct
         # download URL manually in order to benefit from caching nexus repo (if present, OFC)
-        download_url  = self.download_nexus_url + LangUtils.when(self.download_nexus_url.endswith('/'), '', '/') 
+        download_url  = self.download_nexus_url + lu.when(self.download_nexus_url.endswith('/'), '', '/') 
         download_url += f'repository/{self.maven_repo}'
-        download_url += LangUtils.when(assets[0]['path'].startswith('/'), '', '/') + assets[0]['path']
+        download_url += lu.when(assets[0]['path'].startswith('/'), '', '/') + assets[0]['path']
         Logging.debug(f'Downloading {download_url} for asset with id={assets[0]['id']}')
         r = requests.get(download_url)
         r.raise_for_status()
