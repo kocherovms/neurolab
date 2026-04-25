@@ -13,6 +13,8 @@ import matplotlib.backends.backend_agg as plt_backend_agg
 
 import torch
 
+import av # video support
+
 RMQ_EVENTS_EXCHANGE_NAME = 'events'
 RMQ_EVENTS_QUEUE_NAME = 'events'
 RMQ_DEFAULT_CONNECTION_URL = 'amqp://guest:guest@rabbitmq:5672/%2F'
@@ -73,21 +75,20 @@ class RmqSummaryWriter(RmqSummaryBase):
             pickle.dump(image, b)
             self._robust_publish(body=b.getvalue(), properties=properties)
 
-    def add_video(self, tag, vid_tensor, global_step=None, fps=4, walltime=None):
-        properties = self._create_message_properties('add_video')
+    # To distinguish from SummaryWriter.add_video which incepts raw video frames
+    def add_video_file(self, tag, video_file, global_step=None):
+        properties = self._create_message_properties('add_video_file')
         properties.headers['tag'] = tag
 
         if global_step is not None:
             properties.headers['global_step'] = str(global_step)
-            
-        properties.headers['fps'] = str(fps)
 
-        if walltime is not None:
-            properties.headers['walltime'] = str(walltime)
-
-        with io.BytesIO() as b:
-            torch.save(vid_tensor, b)
-            self._robust_publish(body=b.getvalue(), properties=properties)
+        if isinstance(video_file, io.IOBase):
+            video_file.seek(0)
+            self._robust_publish(body=video_file.read(), properties=properties)
+        else:
+            with open(video_file, 'rb') as f:
+                self._robust_publish(body=f.read(), properties=properties)
 
     def add_hparams(self, hparam_dict, metric_dict, run_name):
         properties = self._create_message_properties('add_hparams')
@@ -164,32 +165,41 @@ class RmqSummaryCollector(RmqSummaryBase):
                 with io.BytesIO(body) as b:
                     scalar_value = pickle.load(b)
                     self.get_summary_writer(log_dir).add_scalar(tag, scalar_value, global_step)
-                    print(f'add_scalar, log_dir={log_dir}, tag={tag}, scalar_value={scalar_value}, global_step={global_step}')
+                    print(f'add_scalar, {log_dir=}, {tag=}, {scalar_value=}, {global_step=}')
             case 'add_text':
                 text_string = body.decode()
                 self.get_summary_writer(log_dir).add_text(tag, text_string, global_step)
-                print(f'add_text, log_dir={log_dir}, tag={tag}, text_string="{text_string}", global_step={global_step}')
+                print(f'add_text, {log_dir=}, {tag=}, {text_string[:1000]=}, {global_step=}')
             case 'add_figure':
                 with io.BytesIO(body) as b:
                     image_data = pickle.load(b)
                     self.get_summary_writer(log_dir).add_image(tag, image_data, global_step)
-                    print(f'add_figure, log_dir={log_dir}, tag={tag}, shape(image_data)={image_data.shape}, global_step={global_step}')
-            case 'add_video':
+                    print(f'add_figure, {log_dir=}, {tag=}, {image_data.shape=}, {global_step=}')
+            case 'add_video_file':
                 with io.BytesIO(body) as b:
-                    vid_tensor = torch.load(b)
-                    fps = properties.headers.get('fps', None)
-                    fps = lu.when(fps, lambda: float(fps), None)
-                    walltime = properties.headers.get('walltime', None)
-                    walltime = lu.when(walltime, lambda: float(walltime), None)
-                    self.get_summary_writer(log_dir).add_video(tag, vid_tensor, global_step, fps, walltime)
-                    print(f'add_video, {log_dir=}, {tag=}, {vid_tensor.shape=}, {global_step=}, {fps=}, {walltime=}')
+                    container = av.open(b)
+                    fps = float(container.streams.video[0].average_rate)
+                    fps = lu.when(fps > 60, 60, fps)
+                    frames = []
+                    
+                    for frame in container.decode(video=0):
+                        # Convert to RGB and then to a torch tensor
+                        img = frame.to_image().convert('RGB')
+                        frames.append(torch.from_numpy(np.array(img)))
+    
+                    video_tensor = torch.stack(frames) 
+                    # 3. Permute to PyTorch format: (N, T, C, H, W)
+                    # add Batch dim (N=1) and move Channels (C) to index 2
+                    video_tensor = video_tensor.unsqueeze(0).permute(0, 1, 4, 2, 3)
+                    self.get_summary_writer(log_dir).add_video(tag, video_tensor, global_step, fps)
+                    print(f'add_video_file, {log_dir=}, {tag=}, {video_tensor.shape=}, {global_step=}, {fps=}')
             case 'add_hparams':
                 with io.BytesIO(body) as b:
                     message = json.load(b)
                     hparam_dict = message['hparam_dict']
                     metric_dict = message['metric_dict']
-                    print(f'add_hparams, log_dir={log_dir}, hparam_dict={hparam_dict}, metric_dict={metric_dict}, run_name={run_name}')
                     self.get_summary_writer(log_dir).add_hparams(hparam_dict, metric_dict, run_name=run_name)
+                    print(f'add_hparams, {log_dir=}, {hparam_dict=}, {metric_dict=}, {run_name=}')
             case 'flush':
                 self.get_summary_writer(log_dir).flush()
                 print('flush')
