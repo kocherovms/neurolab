@@ -15,6 +15,8 @@ import torch
 
 import av # video support
 
+import lang_utils as lu
+
 RMQ_EVENTS_EXCHANGE_NAME = 'events'
 RMQ_EVENTS_QUEUE_NAME = 'events'
 RMQ_DEFAULT_CONNECTION_URL = 'amqp://guest:guest@rabbitmq:5672/%2F'
@@ -50,7 +52,7 @@ class RmqSummaryWriter(RmqSummaryBase):
     def add_scalar(self, tag, scalar_value, global_step):
         properties = self._create_message_properties('add_scalar')
         properties.headers['tag'] = tag
-        properties.headers['global_step'] = str(global_step)
+        properties.headers['global_step'] = global_step
         
         with io.BytesIO() as b:
             if isinstance(scalar_value, torch.Tensor):
@@ -62,13 +64,13 @@ class RmqSummaryWriter(RmqSummaryBase):
     def add_text(self, tag, text_string, global_step):
         properties = self._create_message_properties('add_text')
         properties.headers['tag'] = tag
-        properties.headers['global_step'] = str(global_step)
+        properties.headers['global_step'] = global_step
         self._robust_publish(body=text_string.encode(), properties=properties)
         
     def add_figure(self, tag, figure, global_step, close):
         properties = self._create_message_properties('add_figure')
         properties.headers['tag'] = tag
-        properties.headers['global_step'] = str(global_step)
+        properties.headers['global_step'] = global_step
 
         with io.BytesIO() as b:
             image = self._figure_to_image(figure, close)
@@ -76,12 +78,10 @@ class RmqSummaryWriter(RmqSummaryBase):
             self._robust_publish(body=b.getvalue(), properties=properties)
 
     # To distinguish from SummaryWriter.add_video which incepts raw video frames
-    def add_video_file(self, tag, video_file, global_step=None):
+    def add_video_file(self, tag, video_file, global_step):
         properties = self._create_message_properties('add_video_file')
         properties.headers['tag'] = tag
-
-        if global_step is not None:
-            properties.headers['global_step'] = str(global_step)
+        properties.headers['global_step'] = global_step
 
         if isinstance(video_file, io.IOBase):
             video_file.seek(0)
@@ -89,6 +89,19 @@ class RmqSummaryWriter(RmqSummaryBase):
         else:
             with open(video_file, 'rb') as f:
                 self._robust_publish(body=f.read(), properties=properties)
+
+    def add_file(self, file, file_name):
+        properties = self._create_message_properties('add_file')
+        properties.headers['file_name'] = file_name
+
+        if isinstance(file, io.IOBase):
+            file.seek(0)
+            body = file.read()
+        else:
+            with open(file, 'rb') as f:
+                body = f.read()
+
+        self._robust_publish(body=body, properties=properties)
 
     def add_hparams(self, hparam_dict, metric_dict, run_name):
         properties = self._create_message_properties('add_hparams')
@@ -157,6 +170,7 @@ class RmqSummaryCollector(RmqSummaryBase):
         logic_method = properties.headers['method']
         log_dir = properties.headers['log_dir']
         global_step = properties.headers.get('global_step', None)
+        global_step = lu.when(global_step, lambda: int(global_step), global_step) # all headers are strings
         tag = properties.headers.get('tag', None)
         run_name = properties.headers.get('run_name', None)
 
@@ -176,6 +190,8 @@ class RmqSummaryCollector(RmqSummaryBase):
                     self.get_summary_writer(log_dir).add_image(tag, image_data, global_step)
                     print(f'add_figure, {log_dir=}, {tag=}, {image_data.shape=}, {global_step=}')
             case 'add_video_file':
+                video_file_len = len(body)
+                # Perform transcoding and upload to tensorboard UI. Very slow. In fact produces animated GIF from video file
                 with io.BytesIO(body) as b:
                     container = av.open(b)
                     fps = float(container.streams.video[0].average_rate)
@@ -192,7 +208,16 @@ class RmqSummaryCollector(RmqSummaryBase):
                     # add Batch dim (N=1) and move Channels (C) to index 2
                     video_tensor = video_tensor.unsqueeze(0).permute(0, 1, 4, 2, 3)
                     self.get_summary_writer(log_dir).add_video(tag, video_tensor, global_step, fps)
-                    print(f'add_video_file, {log_dir=}, {tag=}, {video_tensor.shape=}, {global_step=}, {fps=}')
+                    print(f'add_video_file, {log_dir=}, {tag=}, {video_tensor.shape=} ({video_tensor.dtype}) ({video_file_len} bytes), {global_step=}, {fps=}')
+            case 'add_file':
+                file_len = len(body)
+                full_log_dir = os.path.join(self.base_log_dir, log_dir.lstrip('/'))
+                file_name = properties.headers['file_name']
+                
+                with open(os.path.join(full_log_dir, file_name), 'wb') as f:
+                    f.write(body)
+
+                print(f'add_file, {log_dir=}, {file_name=} ({file_len} bytes)')
             case 'add_hparams':
                 with io.BytesIO(body) as b:
                     message = json.load(b)
