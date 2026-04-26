@@ -105,7 +105,7 @@ HTML_TEMPLATE = '''
             {% if current_video %}
                 <div class="video-title">Playing: {{ current_video }}</div>
                 <div class="player-wrapper">
-                    <video controls autoplay>
+                    <video controls autoplay muted>
                         <source src="/stream/{{ subpath }}/{{ current_video }}" type="video/mp4">
                     </video>
                 </div>
@@ -138,8 +138,8 @@ def index(req_path):
 
     # Separate files and folders
     items = os.listdir(list_path)
-    dirs = [i for i in items if os.path.isdir(os.path.join(list_path, i))]
-    videos = [i for i in items if i.lower().endswith(('.mp4', '.webm')) and os.path.isfile(os.path.join(list_path, i))]
+    dirs = sorted([i for i in items if os.path.isdir(os.path.join(list_path, i))])
+    videos = sorted([i for i in items if i.lower().endswith(('.mp4', '.webm')) and os.path.isfile(os.path.join(list_path, i))])
 
     return render_template_string(
         HTML_TEMPLATE, 

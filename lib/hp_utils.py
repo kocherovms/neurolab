@@ -61,6 +61,12 @@ class ArtifactSourceParams:
     model_name: str = None
     model_version: str = None
 
+@dataclass(slots=True)
+class UniversalModuleParams:
+    module_name: str = None
+    args: list = None
+    kwargs: dict = None
+
 def get_lark_tree_value(tree, var_name, default_value=None):
     try:
         return next(tree.scan_values(lambda i: i is not None and i.type == var_name)).value
@@ -395,3 +401,36 @@ def hp_parse_kwargs(kwargs):
     parser = lark.Lark(grammar, start='spec')
     tree = parser.parse(kwargs)
     return parse_arg_list(tree)[1]
+
+def hp_parse_universal_module(module):
+    grammar = '''
+        spec: MODULE_NAME (("(" args_spec? ")") | )
+        args_spec: (ARG_VALUE ("," ARG_VALUE)* ("," KWARG_NAME "=" KWARG_VALUE)*)? (KWARG_NAME "=" KWARG_VALUE ("," KWARG_NAME "=" KWARG_VALUE)*)?
+
+        MODULE_NAME: IDENTIFIER
+        IDENTIFIER: LETTER (LETTER|DIGIT|"_")*
+        ARG_VALUE: NUMBER | ESCAPED_STRING | "None"
+        KWARG_NAME: IDENTIFIER
+        KWARG_VALUE: NUMBER | ESCAPED_STRING | "None"
+
+        %import common.ESCAPED_STRING
+        %import common.LETTER
+        %import common.NUMBER
+        %import common.DIGIT
+        %import common.WS
+        %ignore WS
+    '''
+    parser = lark.Lark(grammar, start='spec')
+    tree = parser.parse(module)
+    gtv = lambda var_name, default_value='': get_lark_tree_value(tree, var_name, default_value)
+    params = UniversalModuleParams()
+    params.module_name = gtv('MODULE_NAME')
+
+    if t := list(tree.find_data('args_spec')):
+        params.args, params.kwargs = parse_arg_list(t[0])
+    else:
+        params.args = []
+        params.kwargs = {}
+
+    return params
+    
