@@ -32,7 +32,7 @@ HTML_TEMPLATE = '''
         }
 
         .sidebar {
-            flex: 0 0 20%;
+            flex: 0 0 25%;
             min-width: 250px;
             border-right: 1px solid #ccc;
             padding: 20px;
@@ -97,7 +97,7 @@ HTML_TEMPLATE = '''
             <ol>
             {% for video in videos %}
                 <li class="{{ 'active-video' if video == current_video else '' }}">
-                    <a href="/video/{{ subpath }}/{{ video }}">{{ video }} ({{ metas[video]['video']['formatted_duration'] }})</a>
+                    <a href="/video/{{ subpath }}/{{ video }}">{{ video }} ({{ metas[video]['video']['formatted_duration'] }}, {{ metas[video]['game']['reward'] }})</a>
                 </li>
             {% endfor %}
             </ol>
@@ -174,6 +174,8 @@ def index(req_path):
         meta = lu.coalesce(meta, {})
         meta['video'] = meta.get('video', {})
         meta['video']['formatted_duration'] = format_duration(meta['video'].get('duration', None))
+        meta['game'] = meta.get('game', {})
+        meta['game']['reward'] = int(meta['game'].get('reward', 0))
         metas[v] = meta
 
         if is_video and v == os.path.basename(req_path):
