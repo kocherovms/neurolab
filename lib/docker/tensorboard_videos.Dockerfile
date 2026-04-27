@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN pip install flask
 
-COPY tensorboard_videos.py .
+COPY lang_utils.py tensorboard_videos.py .
 
 EXPOSE 5000
 
