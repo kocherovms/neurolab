@@ -168,6 +168,9 @@ class Logging:
             
         return AutoLoggingPrefix(self, d)
 
+    def auto_log_level(self, log_level):
+        return AutoLoggingLogLevel(self, log_level)
+
 class AutoLoggingPrefix:
     def __init__(self, logging, d):
         self.logging = logging
@@ -183,4 +186,16 @@ class AutoLoggingPrefix:
         for k in self.d:
             self.logging.pop_prefix(k)
             
+        return False
+
+class AutoLoggingLogLevel:
+    def __init__(self, logging, level):
+        self.logging = logging
+        self.old_log_level = self.logging.set_log_level('all', level) 
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.logging.set_log_level('all', self.old_log_level) 
         return False
