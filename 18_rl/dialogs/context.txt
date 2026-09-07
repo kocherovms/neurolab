@@ -1,0 +1,45 @@
+PyTorch, RL, ALE.
+
+**Goal**
+
+Teach agent to play Atari Frostbite.
+
+**Current task**
+
+Build a model (World Model, WM) which captures knowledge of how game world works. 
+
+Model consumes sequence of observations. Each observation is a grayscale image of shape (178, 152). Model tasks:
+1) encode (compress) each observation into a latent var (LV) (d_model=256) and then reconstruct it back to pixels as best as it can. This way model learns static structure
+2) given latents for each observation model must predict next observation in pixels. This way model must learn dynamics and temporal stuff. 
+
+Based on this model a next-generation agent is to be built.
+
+**Architecture**
+
+Vision head consumes observations and produces 6x6 grid of 128 features. Features are passed via linear projector to embedding space and labeled with spatial markers - 36 visual tokens. 
+
+Structural transformer (ST) compresses these 36 visual tokens into one structure latent. Structure latent captures state of single observation. Structure latent is labeled with temporal marker. 
+
+Sequence of 4 structure latents is consumed by second transformer (dynamics transformer, DT). DT must learn how thing evolve in time. Output of DT is 4 predictive latents each predicting next observation. First predictive latent as derived from only first structure latent, second predictive latent is derived from first and second structure latents and so on. DT utilizes causal attention mask. 
+
+So a squence of 4 observations gives 8 latents: first 4 latents correspond to 4 structure latents and describe observations in isolation, last 4 latents correspond to 4 dynamics latents and describe next observations. 
+
+Render head consumes latents and produces grayscale images. Render head is a pipeline of ConvTranspose2d modules. Structure latents are passed to render head as-is. Dynamics latents are passed to render head via MLP projector. As such for all latents render head produces rendered images. These are compared against true current and next observations and this way model is optimized.
+
+**Environment**
+
+ALE environment is created with frame skipping=4 and maxpooling. So each observation corresponds to 4 frames. Standard 30FPS is used. Single observation corresponds rouhgly to 0.13 seconds. Frame stacking is not used amid to use of transformer. 
+
+**Training**
+
+There is an agent which could somewhat play Atari Frostbite - 1-st generation agent. It is capable of reaching 5-th level (night level with bears). Data for training is collected via running this agent and recoding sequences of observations along with actions and dones. 
+
+There are 10 data datasets for training. Each dataset is a colleciton of 512 steps within distinct 32 environments. So each dataset contains 16384 sequences. Sequences naturally overlap. Sequence length=5, first 4 observations are used to train ST, last 4 observations are for training DT (next observations).
+
+There is a separate test dataset with the same number of sequences.
+
+SSIM metrics is used to estimate quality of rendered images. So far best SSIM is 0.989.
+
+
+
+
