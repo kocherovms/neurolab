@@ -73,23 +73,23 @@ class Logging:
             stream_handler = logging.StreamHandler(stdout)
             verbose_stdout_logger.addHandler(stream_handler)
 
+        self.log_fname = log_fname
+        file_logger = logging.getLogger('kmslog_file')
+        
+        if not file_logger.hasHandlers():
+            if log_fname is not None:
+                file_handler = logging.FileHandler(log_fname, mode='a', encoding='utf-8')
+                file_logger.addHandler(file_handler)
+            else:
+                file_logger.addHandler(logging.NullHandler())
+                
         self.sinks = dict(
             syslog=Logging.Sink(syslog_logger, self.prepare_syslog_message, is_enabled=True),
             stdout=Logging.Sink(stdout_logger, self.prepare_stdout_message, is_enabled=True),
             verbose_stdout=Logging.Sink(verbose_stdout_logger, self.prepare_verbose_stdout_message, is_enabled=False),
+            file=Logging.Sink(file_logger, self.prepare_file_message, is_enabled=False),
         )
         
-        self.log_fname = log_fname
-        
-        if log_fname is not None:
-            file_logger = logging.getLogger('kmslog_file')
-            
-            if not file_logger.hasHandlers():
-                file_handler = logging.FileHandler(log_fname, mode='a', encoding='utf-8')
-                file_logger.addHandler(file_handler)
-
-            self.sinks['file'] = Logging.Sink(file_logger, self.prepare_file_message, is_enabled=False)
-
         self.set_log_level('all', logging.DEBUG)
 
         self.app_name = 'MAIN'
