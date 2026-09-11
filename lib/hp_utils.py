@@ -353,7 +353,7 @@ def hp_parse_artifact_source(source):
         GROUP_ID: (LETTER|DIGIT|"_"|"-"|".")+
         MODEL_NAME: EXT_IDENTIFIER
         MODEL_VERSION: EXT_IDENTIFIER
-        ASSET_CLASSIFIER: (LETTER|DIGIT|"_"|"-"|",")+
+        ASSET_CLASSIFIER: (LETTER|DIGIT|"_"|"-"|","|"=")+
         EXT_IDENTIFIER: (LETTER|DIGIT|"_"|"-")+
 
         %import common.LETTER
