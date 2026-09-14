@@ -254,3 +254,4 @@
 {"op_code":4,"worker_id":"7a48fdaf-c7ec-40c2-bd83-dfdde4f7705c-139418378733056","study_id":0,"datetime_start":"2026-09-10T20:16:34.303118"}
 {"op_code":8,"worker_id":"7a48fdaf-c7ec-40c2-bd83-dfdde4f7705c-139418378733056","trial_id":62,"user_attr":{"MODEL_VERSION":"297"}}
 {"op_code":5,"worker_id":"7a48fdaf-c7ec-40c2-bd83-dfdde4f7705c-139418378733056","trial_id":62,"param_name":"learn_rate","param_value_internal":0.0006079561145037277,"distribution":"{\"name\": \"FloatDistribution\", \"attributes\": {\"step\": null, \"low\": 0.0001, \"high\": 0.01, \"log\": false}}"}
+{"op_code":0,"worker_id":"991fae1d-197c-46be-853a-f06777f41f0a-126666241799680","study_name":"18d_study_17.1","directions":[1]}
