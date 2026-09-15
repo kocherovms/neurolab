@@ -22,6 +22,7 @@ import tarfile
 
 import lang_utils as lu
 from logging_utils import *
+import command_listener
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name_prefix', type=str, default=None)
@@ -60,7 +61,7 @@ LOG.enable('verbose_stdout', True)
 LOG.set_log_level('all', logging.getLevelName(args.log_level.upper()))
 
 name_prefix = lu.coalesce(args.name_prefix, socket.gethostname())
-runner_name = f'{name_prefix}_{time.time():.3f}'
+runner_name = f'{name_prefix}_{time.monotonic():.3f}'
 LOG(f'Runner "{runner_name}" starting')
 
 docker_client = docker.from_env()
@@ -125,8 +126,10 @@ class State(IntEnum):
     IMAGE_PULL = auto()
     RUN = auto()
     RESULT_UPLOAD = auto()
+    PAUSE = auto()
 
 state = State.IDLE
+is_pause_requested = False
 launch_id = None
 launch_start_time = None
 launch = None
@@ -138,6 +141,11 @@ failed_heartbeats_count = 0
 failed_pending_launch_gets_count = 0
 failed_result_uploads_count = 0
 run_result = None
+
+command_listener = command_listener.CommandListener()
+command_listener.start()
+LOG(f'CommandListener started on port={command_listener.DEFAULT_PORT}')
+
 
 @dataclass(slots=True)
 class ResultMetadata:
@@ -174,29 +182,50 @@ def pull_image(image_name, pull_result, finish_event):
 LOG(f'Runner ready')
         
 while True:
-    sleep_interval = args.heartbeat_interval
-    my_time = time.time()
-    
-    try:
-        heartbeat_key = f'{args.key_prefix}/heartbeats/{runner_name}/{int(my_time)}{lu.when(launch_id is not None, lambda: '_' + launch_id + '|' + str(int(my_time - launch_start_time)), '')}'
-        s3.put_object(
-            Key=heartbeat_key,
-            Bucket=args.s3_bucket_name,
-            Body=b'',
-        )
-        LOG.debug(
-            f'Heartbeat sent "{heartbeat_key}", ' +
-            f'state={state.name}' +
-            lu.when(container is not None, lambda: f', container "{container.name}" ({container.short_id})', ''),
-        )
-        failed_heartbeats_count = 0
-    except botocore.exceptions.BotoCoreError as e:
-        LOG.error(f'Failed to send heartbeat: {str(e)}')
-        failed_heartbeats_count += 1
+    if command := command_listener.get_command():
+        LOG(f'Got {command=}')
+        
+        if command == 'drain':
+            is_pause_requested = True
+        elif command == 'resume':
+            is_pause_requested = False
 
-    if failed_heartbeats_count >= args.max_failed_heartbeats_count:
-        raise Exception(f'Threshold of failed heartbeats ' + 
-                        f'({failed_heartbeats_count} vs {args.max_failed_heartbeats_count}) reached, giving up')
+            if state == State.PAUSE:
+                state = State.IDLE
+                LOG('State set to IDLE when being PAUSE')
+            else:
+                LOG(f'Ignoring resume request when being in state {state.name}')
+        else:
+            LOG(f'Ignoring unknown {command=}')
+    
+    sleep_interval = args.heartbeat_interval
+
+    if state != State.PAUSE:
+        my_time = time.monotonic()
+        
+        try:
+            heartbeat_key = (
+                f'{args.key_prefix}/heartbeats/{runner_name}/{int(my_time)}' + 
+                f'{lu.when(launch_id is not None, lambda: '_' + launch_id + '|' + str(int(my_time - launch_start_time)), '')}'
+            )
+            s3.put_object(
+                Key=heartbeat_key,
+                Bucket=args.s3_bucket_name,
+                Body=b'',
+            )
+            LOG.debug(
+                f'Heartbeat sent "{heartbeat_key}", ' +
+                f'state={state.name}' +
+                lu.when(container is not None, lambda: f', container "{container.name}" ({container.short_id})', ''),
+            )
+            failed_heartbeats_count = 0
+        except botocore.exceptions.BotoCoreError as e:
+            LOG.error(f'Failed to send heartbeat: {str(e)}')
+            failed_heartbeats_count += 1
+    
+        if failed_heartbeats_count >= args.max_failed_heartbeats_count:
+            raise Exception(f'Threshold of failed heartbeats ' + 
+                            f'({failed_heartbeats_count} vs {args.max_failed_heartbeats_count}) reached, giving up')
 
     if state == State.IDLE:
         assert launch_id is None
@@ -215,7 +244,7 @@ while True:
             for obj in response.get('Contents', []):
                 key = obj['Key']
                 launch_id = os.path.basename(key)
-                launch_start_time = time.time()
+                launch_start_time = time.monotonic()
                 LOG(f'Processing new launch "{launch_id}"')
 
                 s3_context = 'get_object'
@@ -282,76 +311,85 @@ while True:
                     state = State.RESULT_UPLOAD
                     sleep_interval = 0
                 else:
-                    try:
-                        device_requests = []
-
-                        if is_gpu_present:
-                            device_requests.append(DeviceRequest(count=-1, capabilities=[["gpu"]]))
-
-                        kwargs = dict(
-                            image=launch['launch_image'],
-                            environment=env_vars,
-                            shm_size=lu.coalesce(launch.get('shm_size'), '16G'),
-                            volumes=['/dev/log:/dev/log'], # for logging
-                            device_requests=device_requests,
-                            detach=True,
-                            remove=False,  # Keep container after exit so we can fetch its files/status
-                        )
-
-                        image_version = launch['launch_image'].split(':')[-1]
-                        kwargs['name'] = f'{generate_word_triplet()}_{image_version}_{lu.coalesce(args.container_name_suffix, 'unk')}'
-
-                        if args.user is not None:
-                            kwargs['user'] = args.user
-
-                        if args.mps:
-                            kwargs['ipc_mode'] = 'host'
-                            mps_dir_name = '/tmp/nvidia-mps'
-                            mps_dir_name += lu.when(args.gpu is not None, f'-gpu{args.gpu}', '')
-                            kwargs['volumes'].append(f'{mps_dir_name}:{mps_dir_name}')
-                            # There may be conflict with default behavior of NVIDIA Container Toolkit 
-                            # which automatically mounts /tmp/nvidia-mps if it sees MPS enabled on host.
-                            # But if there several GPUs on host then default mount may ruin configuration 
-                            # since there may be multiple MPS servers on host with distinct pipe dirs.
-                            # So we better be explicit and use named MPS pipe dir here
-                            env_vars['CUDA_MPS_PIPE_DIRECTORY'] = mps_dir_name
-                        else:
-                            if args.gpu is not None:
-                                env_vars['CUDA_DEVICE'] = f'cuda:{args.gpu}'
-
-                        if args.cpuset_cpus is not None:
-                            kwargs['cpuset_cpus'] = args.cpuset_cpus
-
-                        if args.hostname is not None:
-                            kwargs['hostname'] = args.hostname
-
-                        LOG.debug(f'Starting container with params: {kwargs}')
-                        container = docker_client.containers.run(**kwargs)
-                        LOG(f'Container "{container.name}" ({container.short_id}) started for "{launch_id}"')
-                        state = State.RUN
-                        sleep_interval = 0
-                    except DockerException as e:
-                        error_message = f'Failed to start container for "{launch_id}": {str(e)}'
-                        LOG.error(error_message)
-                        metadata = ResultMetadata(
-                            is_ok=False, 
-                            error_message=error_message, 
-                            error_code=1, 
-                            runner_name=runner_name,
-                        )
-                        run_result = dict(
-                            Key=f'{args.key_prefix}/complete_launches/{runner_name}/{launch_id}',
-                            Bucket=args.s3_bucket_name, 
-                            Body=b'',
-                            ContentType='application/octet-stream',
-                            Metadata=metadata.asdict(),
-                        )
+                    if is_pause_requested:
                         launch_id = None
                         launch_start_time = None
                         launch = None
                         container = None
-                        state = State.RESULT_UPLOAD
+                        state = State.PAUSE
                         sleep_interval = 0
+                        LOG('Entered PAUSE state after image pull is finished')
+                    else:
+                        try:
+                            device_requests = []
+    
+                            if is_gpu_present:
+                                device_requests.append(DeviceRequest(count=-1, capabilities=[["gpu"]]))
+    
+                            kwargs = dict(
+                                image=launch['launch_image'],
+                                environment=env_vars,
+                                shm_size=lu.coalesce(launch.get('shm_size'), '16G'),
+                                volumes=['/dev/log:/dev/log'], # for logging
+                                device_requests=device_requests,
+                                detach=True,
+                                remove=False,  # Keep container after exit so we can fetch its files/status
+                            )
+    
+                            image_version = launch['launch_image'].split(':')[-1]
+                            kwargs['name'] = f'{generate_word_triplet()}_{image_version}_{lu.coalesce(args.container_name_suffix, 'unk')}'
+    
+                            if args.user is not None:
+                                kwargs['user'] = args.user
+    
+                            if args.mps:
+                                kwargs['ipc_mode'] = 'host'
+                                mps_dir_name = '/tmp/nvidia-mps'
+                                mps_dir_name += lu.when(args.gpu is not None, f'-gpu{args.gpu}', '')
+                                kwargs['volumes'].append(f'{mps_dir_name}:{mps_dir_name}')
+                                # There may be conflict with default behavior of NVIDIA Container Toolkit 
+                                # which automatically mounts /tmp/nvidia-mps if it sees MPS enabled on host.
+                                # But if there several GPUs on host then default mount may ruin configuration 
+                                # since there may be multiple MPS servers on host with distinct pipe dirs.
+                                # So we better be explicit and use named MPS pipe dir here
+                                env_vars['CUDA_MPS_PIPE_DIRECTORY'] = mps_dir_name
+                            else:
+                                if args.gpu is not None:
+                                    env_vars['CUDA_DEVICE'] = f'cuda:{args.gpu}'
+    
+                            if args.cpuset_cpus is not None:
+                                kwargs['cpuset_cpus'] = args.cpuset_cpus
+    
+                            if args.hostname is not None:
+                                kwargs['hostname'] = args.hostname
+    
+                            LOG.debug(f'Starting container with params: {kwargs}')
+                            container = docker_client.containers.run(**kwargs)
+                            LOG(f'Container "{container.name}" ({container.short_id}) started for "{launch_id}"')
+                            state = State.RUN
+                            sleep_interval = 0
+                        except DockerException as e:
+                            error_message = f'Failed to start container for "{launch_id}": {str(e)}'
+                            LOG.error(error_message)
+                            metadata = ResultMetadata(
+                                is_ok=False, 
+                                error_message=error_message, 
+                                error_code=1, 
+                                runner_name=runner_name,
+                            )
+                            run_result = dict(
+                                Key=f'{args.key_prefix}/complete_launches/{runner_name}/{launch_id}',
+                                Bucket=args.s3_bucket_name, 
+                                Body=b'',
+                                ContentType='application/octet-stream',
+                                Metadata=metadata.asdict(),
+                            )
+                            launch_id = None
+                            launch_start_time = None
+                            launch = None
+                            container = None
+                            state = State.RESULT_UPLOAD
+                            sleep_interval = 0
             finally:
                 pull_result = None
                 pull_finished_event = None
@@ -462,7 +500,12 @@ while True:
             container = None
             run_result = None
             sleep_interval = 0
-            state = State.IDLE
+            
+            if is_pause_requested:
+                state = State.PAUSE
+                LOG('Entered PAUSE state after launch is aborted')
+            else:
+                state = State.IDLE
 
     elif state == State.RESULT_UPLOAD:
         assert run_result is not None
@@ -470,7 +513,13 @@ while True:
         try:
             s3.put_object(**run_result)
             run_result = None
-            state = State.IDLE
+
+            if is_pause_requested:
+                state = State.PAUSE
+                LOG('Entered PAUSE state after result is uploaded')
+            else:
+                state = State.IDLE
+                
             failed_result_uploads_count = 0
         except botocore.exceptions.BotoCoreError as e:
             LOG.error(f'Failed to upload run result: {str(e)}')
@@ -479,7 +528,11 @@ while True:
         if failed_result_uploads_count >= args.max_failed_result_uploads_count:
             raise Exception(f'Threshold of failed result uploads ' + 
                             f'({failed_result_uploads_count} vs {args.max_failed_result_uploads_count}) reached, giving up')
-        
+
+    elif state == State.PAUSE:
+        is_pause_requested = False
+    else:
+        assert False, f'Unsupported {state=}'
     
     time.sleep(sleep_interval)
     

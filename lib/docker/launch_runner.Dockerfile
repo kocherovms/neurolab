@@ -13,5 +13,19 @@ RUN pip install --break-system-packages --no-cache-dir names_generator
 
 WORKDIR /app
 COPY launch_runner.py lang_utils.py logging_utils.py  .
+
+# Command scripts
+USER 0
+
+RUN echo "#!/bin/sh" >> /usr/bin/drain
+RUN echo "echo drain | nc localhost 5555" >> /usr/bin/drain
+RUN chmod +x /usr/bin/drain
+
+RUN echo "#!/bin/sh" >> /usr/bin/resume
+RUN echo "echo resume | nc localhost 5555" >> /usr/bin/resume
+RUN chmod +x /usr/bin/resume
+
+USER 1000
+
 # CMD ["python3", "launch_runner.py"]
 ENTRYPOINT ["python3", "launch_runner.py"]
