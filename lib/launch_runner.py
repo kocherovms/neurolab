@@ -178,11 +178,12 @@ def pull_image(image_name, pull_result, finish_event):
         finish_event.set()
 
 def pause_self():
-    self_container_name = f'launch_runner{args.container_name_prefix}'
+    global is_pause_requested
+    is_pause_requested = False
+    self_container_name = f'launch_runner{args.container_name_suffix}'
     self_container = docker_client.containers.get(self_container_name)
     LOG(f'Pausing self-container "{self_container_name}" ({self_container.short_id})')
     self_container.pause()
-    is_pause_requested = False
 
 LOG(f'Runner ready')
         
@@ -194,7 +195,7 @@ while True:
             is_pause_requested = True
         else:
             LOG(f'Ignoring unknown {command=}')
-    
+
     sleep_interval = args.heartbeat_interval
     my_time = time.time()
     

@@ -20,9 +20,5 @@ RUN echo "#!/bin/sh" >> /usr/bin/drain
 RUN echo "echo drain | nc localhost 5555" >> /usr/bin/drain
 RUN chmod +x /usr/bin/drain
 
-RUN echo "#!/bin/sh" >> /usr/bin/resume
-RUN echo "echo resume | nc localhost 5555" >> /usr/bin/resume
-RUN chmod +x /usr/bin/resume
-
 # CMD ["python3", "launch_runner.py"]
 ENTRYPOINT ["python3", "launch_runner.py"]
