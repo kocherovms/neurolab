@@ -1,8 +1,7 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && \
-    apt-get install -y python3-pip && \
-    apt-get install -y tzdata && \
+    apt-get install -y python3-pip tzdata netcat-openbsd && \
     rm -rf /var/lib/apt/lists/*
 ENV TZ=Europe/Moscow
 
@@ -12,7 +11,7 @@ RUN pip install --break-system-packages --no-cache-dir docker
 RUN pip install --break-system-packages --no-cache-dir names_generator 
 
 WORKDIR /app
-COPY launch_runner.py lang_utils.py logging_utils.py  .
+COPY launch_runner.py lang_utils.py logging_utils.py command_listener.py .
 
 # Command scripts
 USER 0
@@ -24,8 +23,6 @@ RUN chmod +x /usr/bin/drain
 RUN echo "#!/bin/sh" >> /usr/bin/resume
 RUN echo "echo resume | nc localhost 5555" >> /usr/bin/resume
 RUN chmod +x /usr/bin/resume
-
-USER 1000
 
 # CMD ["python3", "launch_runner.py"]
 ENTRYPOINT ["python3", "launch_runner.py"]

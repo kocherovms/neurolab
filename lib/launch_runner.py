@@ -61,7 +61,7 @@ LOG.enable('verbose_stdout', True)
 LOG.set_log_level('all', logging.getLevelName(args.log_level.upper()))
 
 name_prefix = lu.coalesce(args.name_prefix, socket.gethostname())
-runner_name = f'{name_prefix}_{time.monotonic():.3f}'
+runner_name = f'{name_prefix}_{time.time():.3f}'
 LOG(f'Runner "{runner_name}" starting')
 
 docker_client = docker.from_env()
@@ -187,6 +187,10 @@ while True:
         
         if command == 'drain':
             is_pause_requested = True
+            
+            if state == State.IDLE:
+                state = State.PAUSE
+                LOG('State set to PAUSE when being IDLE')
         elif command == 'resume':
             is_pause_requested = False
 
@@ -201,7 +205,7 @@ while True:
     sleep_interval = args.heartbeat_interval
 
     if state != State.PAUSE:
-        my_time = time.monotonic()
+        my_time = time.time()
         
         try:
             heartbeat_key = (
@@ -244,7 +248,7 @@ while True:
             for obj in response.get('Contents', []):
                 key = obj['Key']
                 launch_id = os.path.basename(key)
-                launch_start_time = time.monotonic()
+                launch_start_time = time.time()
                 LOG(f'Processing new launch "{launch_id}"')
 
                 s3_context = 'get_object'
@@ -503,7 +507,7 @@ while True:
             
             if is_pause_requested:
                 state = State.PAUSE
-                LOG('Entered PAUSE state after launch is aborted')
+                LOG('State set to PAUSE after launch is aborted')
             else:
                 state = State.IDLE
 
@@ -516,7 +520,7 @@ while True:
 
             if is_pause_requested:
                 state = State.PAUSE
-                LOG('Entered PAUSE state after result is uploaded')
+                LOG('State set to PAUSE after result is uploaded')
             else:
                 state = State.IDLE
                 
