@@ -36,7 +36,7 @@ parser.add_argument('--user', type=str, default=None) # user in form of user_id:
 parser.add_argument('--mps', action='store_true') # use nvidia MPS server
 parser.add_argument('--gpu', type=int, default=None) # which GPU to use (None means default/first one)
 parser.add_argument('--cpuset_cpus', type=str, default=None) # value of cpuset_cpus to forward to container
-parser.add_argument('--hostname', type=str, default=None) # hostname of container
+parser.add_argument('--hostname', type=str, default=None) # hostname of container (reported to tensorboard within "config" section)
 parser.add_argument('--container_name_suffix', type=str, default=None) # suffix to append to name of launched container 
 parser.add_argument('--max_failed_heartbeats_count', type=int, default=5) # how many heartbeats failures in a row must happen before give up
 parser.add_argument('--max_failed_pending_launch_gets_count', type=int, default=10) # how many failed attempts to get a pending launch in a row must happen before give up
@@ -126,7 +126,6 @@ class State(IntEnum):
     IMAGE_PULL = auto()
     RUN = auto()
     RESULT_UPLOAD = auto()
-    PAUSE = auto()
 
 state = State.IDLE
 is_pause_requested = False
@@ -145,7 +144,6 @@ run_result = None
 command_listener = command_listener.CommandListener()
 command_listener.start()
 LOG(f'CommandListener started on port={command_listener.DEFAULT_PORT}')
-
 
 @dataclass(slots=True)
 class ResultMetadata:
@@ -179,6 +177,13 @@ def pull_image(image_name, pull_result, finish_event):
     finally:
         finish_event.set()
 
+def pause_self():
+    self_container_name = f'launch_runner{args.container_name_prefix}'
+    self_container = docker_client.containers.get(self_container_name)
+    LOG(f'Pausing self-container "{self_container_name}" ({self_container.short_id})')
+    self_container.pause()
+    is_pause_requested = False
+
 LOG(f'Runner ready')
         
 while True:
@@ -187,51 +192,40 @@ while True:
         
         if command == 'drain':
             is_pause_requested = True
-            
-            if state == State.IDLE:
-                state = State.PAUSE
-                LOG('State set to PAUSE when being IDLE')
-        elif command == 'resume':
-            is_pause_requested = False
-
-            if state == State.PAUSE:
-                state = State.IDLE
-                LOG('State set to IDLE when being PAUSE')
-            else:
-                LOG(f'Ignoring resume request when being in state {state.name}')
         else:
             LOG(f'Ignoring unknown {command=}')
     
     sleep_interval = args.heartbeat_interval
-
-    if state != State.PAUSE:
-        my_time = time.time()
-        
-        try:
-            heartbeat_key = (
-                f'{args.key_prefix}/heartbeats/{runner_name}/{int(my_time)}' + 
-                f'{lu.when(launch_id is not None, lambda: '_' + launch_id + '|' + str(int(my_time - launch_start_time)), '')}'
-            )
-            s3.put_object(
-                Key=heartbeat_key,
-                Bucket=args.s3_bucket_name,
-                Body=b'',
-            )
-            LOG.debug(
-                f'Heartbeat sent "{heartbeat_key}", ' +
-                f'state={state.name}' +
-                lu.when(container is not None, lambda: f', container "{container.name}" ({container.short_id})', ''),
-            )
-            failed_heartbeats_count = 0
-        except botocore.exceptions.BotoCoreError as e:
-            LOG.error(f'Failed to send heartbeat: {str(e)}')
-            failed_heartbeats_count += 1
+    my_time = time.time()
     
-        if failed_heartbeats_count >= args.max_failed_heartbeats_count:
-            raise Exception(f'Threshold of failed heartbeats ' + 
-                            f'({failed_heartbeats_count} vs {args.max_failed_heartbeats_count}) reached, giving up')
+    try:
+        heartbeat_key = (
+            f'{args.key_prefix}/heartbeats/{runner_name}/{int(my_time)}' + 
+            f'{lu.when(launch_id is not None, lambda: '_' + launch_id + '|' + str(int(my_time - launch_start_time)), '')}'
+        )
+        s3.put_object(
+            Key=heartbeat_key,
+            Bucket=args.s3_bucket_name,
+            Body=b'',
+        )
+        LOG.debug(
+            f'Heartbeat sent "{heartbeat_key}", ' +
+            f'state={state.name}' +
+            lu.when(container is not None, lambda: f', container "{container.name}" ({container.short_id})', ''),
+        )
+        failed_heartbeats_count = 0
+    except botocore.exceptions.BotoCoreError as e:
+        LOG.error(f'Failed to send heartbeat: {str(e)}')
+        failed_heartbeats_count += 1
+
+    if failed_heartbeats_count >= args.max_failed_heartbeats_count:
+        raise Exception(f'Threshold of failed heartbeats ' + 
+                        f'({failed_heartbeats_count} vs {args.max_failed_heartbeats_count}) reached, giving up')
 
     if state == State.IDLE:
+        if is_pause_requested:
+            pause_self()
+            
         assert launch_id is None
         assert launch_start_time is None
         assert launch is None
@@ -320,9 +314,9 @@ while True:
                         launch_start_time = None
                         launch = None
                         container = None
-                        state = State.PAUSE
+                        state = State.IDLE
                         sleep_interval = 0
-                        LOG('Entered PAUSE state after image pull is finished')
+                        LOG('State set to IDLE after image pull is finished and drainig is on')
                     else:
                         try:
                             device_requests = []
@@ -504,12 +498,7 @@ while True:
             container = None
             run_result = None
             sleep_interval = 0
-            
-            if is_pause_requested:
-                state = State.PAUSE
-                LOG('State set to PAUSE after launch is aborted')
-            else:
-                state = State.IDLE
+            state = State.IDLE
 
     elif state == State.RESULT_UPLOAD:
         assert run_result is not None
@@ -517,13 +506,7 @@ while True:
         try:
             s3.put_object(**run_result)
             run_result = None
-
-            if is_pause_requested:
-                state = State.PAUSE
-                LOG('State set to PAUSE after result is uploaded')
-            else:
-                state = State.IDLE
-                
+            state = State.IDLE
             failed_result_uploads_count = 0
         except botocore.exceptions.BotoCoreError as e:
             LOG.error(f'Failed to upload run result: {str(e)}')
@@ -533,8 +516,6 @@ while True:
             raise Exception(f'Threshold of failed result uploads ' + 
                             f'({failed_result_uploads_count} vs {args.max_failed_result_uploads_count}) reached, giving up')
 
-    elif state == State.PAUSE:
-        is_pause_requested = False
     else:
         assert False, f'Unsupported {state=}'
     
