@@ -2,6 +2,7 @@ from collections import defaultdict
 import math
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim
 
 class LrSchedulerWrapper:
@@ -45,6 +46,20 @@ class ModelModeContextManager:
             self.model.eval()
             
         return False
+
+class TrainableModule(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.is_trainable_ = True
+
+    @property
+    def is_trainable(self):
+        return self.is_trainable_
+
+    @is_trainable.setter
+    def is_trainable(self, value):
+        self.is_trainable_ = value
+        self.requires_grad_(value)
 
 def eval_guard(model):
     return ModelModeContextManager(model, 'eval')
