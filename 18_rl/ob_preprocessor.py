@@ -5,7 +5,7 @@ class ObPreprocessor:
     def __init__(self, ob_shape):
         self.ob_shape = ob_shape
         
-    def __call__(self):
+    def __call__(self, obs):
         assert isinstance(obs, torch.Tensor)
         assert obs.dtype == torch.uint8
         obs_ndim = obs.ndim
@@ -17,11 +17,16 @@ class ObPreprocessor:
         obs_shape = obs.shape
         obs = obs.view(-1, *obs_shape[-3:])
         obs = obs.permute(0, 3, 1, 2) # move color channel to the front (switch interleaved->planar format)
-        
-        if self.ob_shape == (1, 178, 152):
+
+        if self.ob_shape == (3, 210, 160):
+            pass
+        elif self.ob_shape == (1, 178, 152):
             obs = VF.rgb_to_grayscale(obs, num_output_channels=1)
             obs = obs[:,:,8:186,8:160] # extract only meaningful data for Frostbite
             obs = obs.view(*obs_shape[:-3], 1, 178, 152)
+        elif self.ob_shape == (3, 178, 152):
+            obs = obs[:,:,8:186,8:160] # extract only meaningful data for Frostbite
+            obs = obs.view(*obs_shape[:-3], 3, 178, 152)
         elif self.ob_shape == (3, 89, 76): # scale down by 2 original shape (178, 152)
             obs = obs[:,:,8:186,8:160] # extract only meaningful data for Frostbite
             obs = VF.resize(obs, [89, 76], interpolation=VF.InterpolationMode.BILINEAR, antialias=True)
