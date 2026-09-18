@@ -48,17 +48,12 @@ class ModelModeContextManager:
         return False
 
 class TrainableModule(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.is_trainable_ = True
-
     @property
     def is_trainable(self):
-        return self.is_trainable_
+        return next(iter(self.parameters())).requires_grad
 
     @is_trainable.setter
     def is_trainable(self, value):
-        self.is_trainable_ = value
         self.requires_grad_(value)
 
 def eval_guard(model):

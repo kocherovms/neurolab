@@ -8,6 +8,12 @@ class ObPreprocessor:
         
     def __call__(self, obs):
         assert isinstance(obs, torch.Tensor)
+
+        if obs.shape[-3:] == self.ob_shape:
+            is_dtype_ok = (self.cast_to_float and obs.dtype != torch.uint8) or (not self.cast_to_float and obs.dtype == torch.uint8)
+            assert is_dtype_ok, f'{obs.dtype=} is not compatible with {self.cast_to_float=}'
+            return obs
+        
         assert obs.dtype == torch.uint8
         obs_ndim = obs.ndim
         assert obs_ndim >= 3 # height, width, color
