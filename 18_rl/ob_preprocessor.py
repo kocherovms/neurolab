@@ -10,8 +10,9 @@ class ObPreprocessor:
         assert isinstance(obs, torch.Tensor)
 
         if obs.shape[-3:] == self.ob_shape:
-            is_dtype_ok = (self.cast_to_float and obs.dtype != torch.uint8) or (not self.cast_to_float and obs.dtype == torch.uint8)
-            assert is_dtype_ok, f'{obs.dtype=} is not compatible with {self.cast_to_float=}'
+            if obs.dtype == torch.uint8 and self.cast_to_float:
+                obs = obs / 255.0
+
             return obs
         
         assert obs.dtype == torch.uint8
