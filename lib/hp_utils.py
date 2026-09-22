@@ -348,11 +348,12 @@ def hp_parse_artifact_source(source):
     params = ArtifactSourceParams()
 
     grammar = '''
-        spec: (GROUP_ID ":")? MODEL_NAME ":" MODEL_VERSION (":" "cls" "=" ASSET_CLASSIFIER)?
+        spec: (GROUP_ID ":")? MODEL_NAME ":" MODEL_VERSION (CLS_MARKER ASSET_CLASSIFIER?)?
 
         GROUP_ID: (LETTER|DIGIT|"_"|"-"|".")+
         MODEL_NAME: EXT_IDENTIFIER
         MODEL_VERSION: EXT_IDENTIFIER
+        CLS_MARKER: ":" "cls" "="
         ASSET_CLASSIFIER: (LETTER|DIGIT|"_"|"-"|","|"=")+
         EXT_IDENTIFIER: (LETTER|DIGIT|"_"|"-")+
 
@@ -368,7 +369,12 @@ def hp_parse_artifact_source(source):
     params.group_id = gtv('GROUP_ID', None)
     params.model_name = gtv('MODEL_NAME')
     params.model_version = gtv('MODEL_VERSION')
-    params.asset_classifier = gtv('ASSET_CLASSIFIER', None)
+
+    if gtv('CLS_MARKER', None):
+        params.asset_classifier = gtv('ASSET_CLASSIFIER', '')
+    else:
+        params.asset_classifier = None
+        
     return params
 
 def hp_parse_arg_list(arg_list):
