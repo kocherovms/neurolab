@@ -111,6 +111,13 @@ class RmqSummaryWriter(RmqSummaryBase):
                 
             pickle.dump(primitivized_tag_scalar_dict, b)
             self._robust_publish(body=b.getvalue(), properties=properties)
+
+    def add_custom_scalars(self, layout):
+        properties = self._create_message_properties('add_custom_scalars')
+
+        with io.BytesIO() as b:
+            pickle.dump(layout, b)
+            self._robust_publish(body=b.getvalue(), properties=properties)
     
     def add_text(self, tag, text_string, global_step):
         properties = self._create_message_properties('add_text')
@@ -227,6 +234,13 @@ class S3SummaryWriter:
             tag=tag,
             scalar_value=scalar_value,
             global_step=global_step,
+        )
+        self.batch.append(batch_item)
+
+    def add_custom_scalars(self, layout):
+        batch_item = dict(
+            method='add_custom_scalars',
+            layout=layout,
         )
         self.batch.append(batch_item)
     
@@ -353,6 +367,11 @@ class RmqSummaryCollector(RmqSummaryBase):
                     tag_scalar_dict = pickle.load(b)
                     self.get_summary_writer(log_dir).add_scalars(tag, tag_scalar_dict, global_step)
                     Logging.get().info(f'add_scalars, {log_dir=}, {tag=}, {tag_scalar_dict=}, {global_step=}')
+            case 'add_custom_scalars':
+                with io.BytesIO(body) as b:
+                    layout = pickle.load(b)
+                    self.get_summary_writer(log_dir).add_custom_scalars(layout)
+                    Logging.get().info(f'add_custom_scalars, {log_dir=}, {layout=}')
             case 'add_text':
                 text_string = body.decode()
                 self.get_summary_writer(log_dir).add_text(tag, text_string, global_step)
@@ -510,6 +529,10 @@ class S3SummaryCollector:
                     scalar_value = batch_item['scalar_value']
                     self.get_summary_writer(log_dir).add_scalar(tag, scalar_value, global_step)
                     Logging.get().info(f'add_scalar, {log_dir=}, {tag=}, {scalar_value=}, {global_step=}')
+                case 'add_custom_scalars':
+                    layout = batch_item['layout']
+                    self.get_summary_writer(log_dir).add_custom_scalars(layout)
+                    Logging.get().info(f'add_custom_scalars, {log_dir=}, {layout=}')
                 case 'add_text':
                     text_string = batch_item['text_string']
                     self.get_summary_writer(log_dir).add_text(tag, text_string, global_step)
