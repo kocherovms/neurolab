@@ -92,6 +92,25 @@ class RmqSummaryWriter(RmqSummaryBase):
                 
             pickle.dump(scalar_value, b)
             self._robust_publish(body=b.getvalue(), properties=properties)
+
+    def add_scalars(self, tag, tag_scalar_dict, global_step):
+        properties = self._create_message_properties('add_scalars')
+        properties.headers['tag'] = tag
+        properties.headers['global_step'] = global_step
+        
+        with io.BytesIO() as b:
+            primitivized_tag_scalar_dict = {}
+            
+            for k in tag_scalar_dict:
+                v = tag_scalar_dict[k]
+                
+                if hasattr(v, 'item'):
+                    primitivized_tag_scalar_dict[k] = v.item()
+                else:
+                    primitivized_tag_scalar_dict[k] = v
+                
+            pickle.dump(primitivized_tag_scalar_dict, b)
+            self._robust_publish(body=b.getvalue(), properties=properties)
     
     def add_text(self, tag, text_string, global_step):
         properties = self._create_message_properties('add_text')
@@ -329,6 +348,11 @@ class RmqSummaryCollector(RmqSummaryBase):
                     scalar_value = pickle.load(b)
                     self.get_summary_writer(log_dir).add_scalar(tag, scalar_value, global_step)
                     Logging.get().info(f'add_scalar, {log_dir=}, {tag=}, {scalar_value=}, {global_step=}')
+            case 'add_scalars':
+                with io.BytesIO(body) as b:
+                    tag_scalar_dict = pickle.load(b)
+                    self.get_summary_writer(log_dir).add_scalars(tag, tag_scalar_dict, global_step)
+                    Logging.get().info(f'add_scalars, {log_dir=}, {tag=}, {tag_scalar_dict=}, {global_step=}')
             case 'add_text':
                 text_string = body.decode()
                 self.get_summary_writer(log_dir).add_text(tag, text_string, global_step)
