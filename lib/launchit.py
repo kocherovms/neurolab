@@ -32,6 +32,15 @@ class NotebookProcessor:
         self.exec_graph = None
         self.collected_source_lines = None
 
+    @property
+    def found_collect_inds(self):
+        s = set()
+
+        for ege in filter(lambda ege: ege.command == Command.COLLECT, self.exec_graph):
+            s.add(ege.index)
+
+        return s
+
     def __call__(self, f, new_fname, expandvars, collect_inds, disable_inds):
         self.nb = json.load(f)
         self.exec_graph = []
@@ -100,7 +109,7 @@ class NotebookProcessor:
                         if ege.is_oneliner:
                             Logging.trace(f'Cell {ege.cell_ind}, skip collecting source line {ege.source_line_ind}, index={ege.index}')
                         else:
-                            assert ege.source_line_ind + 1 < stop_source_line_ind
+                            assert ege.source_line_ind + 1 < stop_source_line_ind, (ege.source_line_ind + 1, stop_source_line_ind)
                             Logging.trace(f'Cell {ege.cell_ind}, skip collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}, index={ege.index}')
                     else:
                         if ege.is_oneliner:
@@ -108,7 +117,7 @@ class NotebookProcessor:
                             source_line = cell['source'][ege.source_line_ind]
                             self.collected_source_lines[ege.index].append(source_line)
                         else:
-                            assert ege.source_line_ind + 1 < stop_source_line_ind
+                            assert ege.source_line_ind + 1 < stop_source_line_ind, (ege.source_line_ind + 1, stop_source_line_ind)
                             Logging.trace(f'Cell {ege.cell_ind}, collecting source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}, index={ege.index}')
         
                             if self.collected_source_lines:
@@ -162,7 +171,7 @@ class NotebookProcessor:
                         Logging.trace(f'Cell {ege.cell_ind}, disabling source line {ege.source_line_ind}, index={ege.index}')
                         cell['source'][ege.source_line_ind] = disable_source_line(cell['source'][ege.source_line_ind])
                     else:
-                        assert ege.source_line_ind + 1 < stop_source_line_ind
+                        assert ege.source_line_ind + 1 < stop_source_line_ind, (ege.source_line_ind + 1, stop_source_line_ind)
                         Logging.trace(f'Cell {ege.cell_ind}, disabling source lines from {ege.source_line_ind + 1} to {stop_source_line_ind}, index={ege.index}')
     
                         for source_line_ind in range(ege.source_line_ind + 1, stop_source_line_ind):
@@ -177,23 +186,24 @@ class NotebookProcessor:
             for source_line_ind, source_line in enumerate(cell['source']):
                 t = string.Template(source_line)
                 cell['source'][source_line_ind] = t.safe_substitute(expandvars)
-
+        
     
-def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', max_serials_count=1_000, collect_inds=None, disable_inds=None):
-    fname_dir = os.path.dirname(fname) if not dir_name else dir_name
-    fname_name = os.path.splitext(os.path.basename(fname))[0]
-    fname_ext = os.path.splitext(fname)[1] if not make_py_file else '.py'
+def launchit(fname, launch_serial=0, expandvars={}, make_py_file=False, dir_name='', max_serials_count=1_000, collect_inds=None, disable_inds=None, new_fname=''):
+    if new_fname == '':
+        fname_dir = os.path.dirname(fname) if not dir_name else dir_name
+        fname_name = os.path.splitext(os.path.basename(fname))[0]
+        fname_ext = os.path.splitext(fname)[1] if not make_py_file else '.py'
+        serials_range = range(1, max_serials_count + 1) if launch_serial == 0 else [launch_serial]
     
-    new_fname = ''
-    serials_range = range(1, max_serials_count + 1) if launch_serial == 0 else [launch_serial]
-
-    for i in serials_range:
-        new_fname = os.path.join(fname_dir, f'{fname_name}-launch{i}{fname_ext}')
-    
-        if not os.path.exists(new_fname):
-            break
+        for i in serials_range:
+            new_fname = os.path.join(fname_dir, f'{fname_name}-launch{i}{fname_ext}')
+        
+            if not os.path.exists(new_fname):
+                break
+        else:
+            raise Exception(f'Failed to generate new launch file name: all variants are taken')
     else:
-        raise Exception(f'Failed to generate new launch file name: all variants are taken')
+        assert not os.path.exists(new_fname)
 
     Logging.debug(f'Creating {new_fname}')
     
