@@ -186,3 +186,4 @@
 {"op_code":6,"worker_id":"ecd8f486-2cff-4d58-8fef-d445f6304cfb-133437793789440","trial_id":27,"state":1,"values":[5.15625],"datetime_complete":"2026-09-28T19:15:17.772427"}
 {"op_code":6,"worker_id":"1a99b72d-cfc9-46e0-b20f-7fc31df0da64-133036751283712","trial_id":29,"state":1,"values":[5.03125],"datetime_complete":"2026-09-28T19:15:59.108901"}
 {"op_code":0,"worker_id":"ad144620-41c3-4dd7-a760-81637962110b-136793484662272","study_name":"18n_study_26.6","directions":[1]}
+{"op_code":0,"worker_id":"9a29f473-2523-48ee-9b54-60b13ba71ba8-124253218956800","study_name":"18n_study_26.6","directions":[1]}
