@@ -81,3 +81,6 @@
 {"op_code":6,"worker_id":"8a3937de-516c-4fae-82f1-3d44f640fcfa-129674919724544","trial_id":22,"state":1,"values":[0.590625],"datetime_complete":"2026-09-27T12:11:04.960744"}
 {"op_code":6,"worker_id":"1c20f9d3-d87f-455d-aa74-39c2d2e11716-140485577315840","trial_id":23,"state":1,"values":[0.65],"datetime_complete":"2026-09-27T12:12:12.727735"}
 {"op_code":0,"worker_id":"5ae060ca-8df9-4ef3-af09-80fbbfee534d-140333946336768","study_name":"18n_study_20.1","directions":[1]}
+{"op_code":0,"worker_id":"71be22d7-bcd7-41dc-9479-f2d31c40b0cf-136099388995072","study_name":"18n_study_20.1","directions":[1]}
+{"op_code":0,"worker_id":"e105df13-8130-43c8-b0f8-af9db7676310-136099388995072","study_name":"18n_study_20.1","directions":[1]}
+{"op_code":0,"worker_id":"ac49c037-d857-45da-a77c-15feb4003b1c-136099388995072","study_name":"18n_study_20.1","directions":[1]}
