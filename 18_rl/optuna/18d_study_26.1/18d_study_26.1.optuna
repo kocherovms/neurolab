@@ -1,4 +1,4 @@
-{"op_code":0,"worker_id":"e71b03cc-faa4-4500-94b2-6e48777b3d38-139730239575552","study_name":"18n_study_26.1","directions":[2]}
+{"op_code":0,"worker_id":"e71b03cc-faa4-4500-94b2-6e48777b3d38-139730239575552","study_name":"18d_study_26.1","directions":[2]}
 {"op_code":2,"worker_id":"e71b03cc-faa4-4500-94b2-6e48777b3d38-139730239575552","study_id":0,"user_attr":{"STUDY_SERIAL":"26.1"}}
 {"op_code":4,"worker_id":"211999c6-c7eb-4ccf-a3df-87c0dd0486a9-132658066785792","study_id":0,"datetime_start":"2026-10-02T16:13:46.066865"}
 {"op_code":8,"worker_id":"211999c6-c7eb-4ccf-a3df-87c0dd0486a9-132658066785792","trial_id":0,"user_attr":{"MODEL_VERSION":"106"}}
@@ -36,4 +36,4 @@
 {"op_code":6,"worker_id":"4ad6e300-d867-4cf5-86e6-561900b98655-129478749746688","trial_id":9,"state":1,"values":[0.9836850762367249],"datetime_complete":"2026-10-02T17:23:05.378120"}
 {"op_code":6,"worker_id":"0fc7e371-04a8-4fb7-af46-bbe7c738f243-130988976117248","trial_id":10,"state":1,"values":[0.9855149984359741],"datetime_complete":"2026-10-02T17:27:25.970911"}
 {"op_code":6,"worker_id":"e169b440-b55b-4adb-8436-23975efd78aa-126017651877376","trial_id":11,"state":1,"values":[0.9866207242012024],"datetime_complete":"2026-10-02T17:30:15.627380"}
-{"op_code":0,"worker_id":"a32d9064-5a2d-403a-bbb6-644a3581bcc1-139730239575552","study_name":"18n_study_26.1","directions":[1]}
+{"op_code":0,"worker_id":"a32d9064-5a2d-403a-bbb6-644a3581bcc1-139730239575552","study_name":"18d_study_26.1","directions":[1]}
