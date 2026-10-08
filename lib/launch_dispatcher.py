@@ -123,7 +123,7 @@ class Launch:
     request: object = None
 
 class LaunchDispatcher:
-    def __init__(self, rmq_connection_url, s3_endpoint_url, s3_bucket_name, key_prefix, launches_fname):
+    def __init__(self, rmq_connection_url, s3_endpoint_url, s3_bucket_name, key_prefix, launches_fname, eol_duration):
         self.rmq_connection_parameters = pika.URLParameters(rmq_connection_url)
         self.rmq_connection = pika.BlockingConnection(self.rmq_connection_parameters)
         self.rmq_connection.call_later(delay=1, callback=self.on_idle)
@@ -145,7 +145,7 @@ class LaunchDispatcher:
 
         # Runners management
         self.runners = {}  # runner_name -> LaunchRunner
-        self.eol_duration = 60
+        self.eol_duration = eol_duration
         
         self.launches = {}
         self.launches_fname = launches_fname
@@ -378,8 +378,8 @@ class LaunchDispatcher:
             busy_runners_count = len(self.runners) - len(free_runner_names)
             pending_launches = list(filter(lambda kv: kv[1].status == LaunchStatus.PENDING, self.launches.items()))
             running_launches_count = len(self.launches) - len(pending_launches)
-            Logging.get().debug(f'Runners (idle+busy=total): {len(free_runner_names)}+{busy_runners_count}={len(self.runners)}. ' + 
-                                f'Launches (pend+run=total): {len(pending_launches)}+{running_launches_count}={len(self.launches)}')
+            Logging.get().debug(f'Runners (total=idle+busy): {len(self.runners)}={len(free_runner_names)}+{busy_runners_count}. ' + 
+                                f'Launches (total=pend+run): {len(self.launches)}={len(pending_launches)}+{running_launches_count}')
     
             if free_runner_names:
                 for launch_id, launch in pending_launches:
@@ -482,6 +482,7 @@ if __name__ == "__main__":
     parser.add_argument('--key_prefix', type=str, default='runners')
     parser.add_argument('--log_level', type=str, default='info')
     parser.add_argument('--launches_fname', type=str, default=None)
+    parser.add_argument('--eol_duration', type=int, default=70)
     args = parser.parse_args()
     
     LOG = Logging.get()
@@ -496,6 +497,7 @@ if __name__ == "__main__":
         s3_bucket_name=args.s3_bucket_name,
         key_prefix=args.key_prefix,
         launches_fname=args.launches_fname,
+        eol_duration=args.eol_duration,
     )
 
     dispatcher.run()
