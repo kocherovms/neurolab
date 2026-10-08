@@ -29,7 +29,8 @@ parser.add_argument('--name_prefix', type=str, default=None)
 parser.add_argument('--s3_endpoint_url', type=str, default='https://s3.ru-7.storage.selcloud.ru:443')
 parser.add_argument('--s3_bucket_name', type=str, default='neurolab')
 parser.add_argument('--key_prefix', type=str, default='runners')
-parser.add_argument('--heartbeat_interval', type=int, default=10)
+parser.add_argument('--heartbeat_interval', type=int, default=30)
+parser.add_argument('--check_interval', type=int, default=10)
 parser.add_argument('--log_level', type=str, default='info')
 parser.add_argument('-e', action='append', default=[]) # env vars to forward
 parser.add_argument('--user', type=str, default=None) # user in form of user_id:group_id to use to exec container (e.g. 1000:1000)
@@ -186,6 +187,7 @@ def pause_self():
     self_container.pause()
 
 LOG(f'Runner ready')
+last_heartbeat_time = 0
         
 while True:
     if command := command_listener.get_command():
@@ -196,32 +198,34 @@ while True:
         else:
             LOG(f'Ignoring unknown {command=}')
 
-    sleep_interval = args.heartbeat_interval
+    sleep_interval = args.check_interval
     my_time = time.time()
-    
-    try:
-        heartbeat_key = (
-            f'{args.key_prefix}/heartbeats/{runner_name}/{int(my_time)}' + 
-            f'{lu.when(launch_id is not None, lambda: '_' + launch_id + '|' + str(int(my_time - launch_start_time)), '')}'
-        )
-        s3.put_object(
-            Key=heartbeat_key,
-            Bucket=args.s3_bucket_name,
-            Body=b'',
-        )
-        LOG.debug(
-            f'Heartbeat sent "{heartbeat_key}", ' +
-            f'state={state.name}' +
-            lu.when(container is not None, lambda: f', container "{container.name}" ({container.short_id})', ''),
-        )
-        failed_heartbeats_count = 0
-    except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
-        LOG.error(f'Failed to send heartbeat: {str(e)}')
-        failed_heartbeats_count += 1
 
-    if failed_heartbeats_count >= args.max_failed_heartbeats_count:
-        raise Exception(f'Threshold of failed heartbeats ' + 
-                        f'({failed_heartbeats_count} vs {args.max_failed_heartbeats_count}) reached, giving up')
+    if (my_time - last_heartbeat_time) > args.heartbeat_interval:
+        try:
+            heartbeat_key = (
+                f'{args.key_prefix}/heartbeats/{runner_name}/{int(my_time)}' + 
+                f'{lu.when(launch_id is not None, lambda: '_' + launch_id + '|' + str(int(my_time - launch_start_time)), '')}'
+            )
+            s3.put_object(
+                Key=heartbeat_key,
+                Bucket=args.s3_bucket_name,
+                Body=b'',
+            )
+            LOG.debug(
+                f'Heartbeat sent "{heartbeat_key}", ' +
+                f'state={state.name}' +
+                lu.when(container is not None, lambda: f', container "{container.name}" ({container.short_id})', ''),
+            )
+            failed_heartbeats_count = 0
+            last_heartbeat_time = time.time()
+        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
+            LOG.error(f'Failed to send heartbeat: {str(e)}')
+            failed_heartbeats_count += 1
+    
+        if failed_heartbeats_count >= args.max_failed_heartbeats_count:
+            raise Exception(f'Threshold of failed heartbeats ' + 
+                            f'({failed_heartbeats_count} vs {args.max_failed_heartbeats_count}) reached, giving up')
 
     if state == State.IDLE:
         if is_pause_requested:
@@ -265,6 +269,7 @@ while True:
                 pull_thread.start()
                 state = State.IMAGE_PULL
                 sleep_interval = 0
+                last_heartbeat_time = 0 # request immediate heartbeat
                 LOG(f'Started pull of launch image "{launch['launch_image']}"')
                 break
                 
@@ -309,6 +314,7 @@ while True:
                     container = None
                     state = State.RESULT_UPLOAD
                     sleep_interval = 0
+                    last_heartbeat_time = 0 # request immediate heartbeat
                 else:
                     if is_pause_requested:
                         launch_id = None
@@ -317,6 +323,7 @@ while True:
                         container = None
                         state = State.IDLE
                         sleep_interval = 0
+                        last_heartbeat_time = 0 # request immediate heartbeat
                         LOG('State set to IDLE after image pull is finished and drainig is on')
                     else:
                         try:
@@ -367,6 +374,7 @@ while True:
                             LOG(f'Container "{container.name}" ({container.short_id}) started for "{launch_id}"')
                             state = State.RUN
                             sleep_interval = 0
+                            last_heartbeat_time = 0 # request immediate heartbeat
                         except DockerException as e:
                             error_message = f'Failed to start container for "{launch_id}": {str(e)}'
                             LOG.error(error_message)
@@ -389,6 +397,7 @@ while True:
                             container = None
                             state = State.RESULT_UPLOAD
                             sleep_interval = 0
+                            last_heartbeat_time = 0 # request immediate heartbeat
             finally:
                 pull_result = None
                 pull_finished_event = None
@@ -489,6 +498,7 @@ while True:
             launch = None
             container = None
             sleep_interval = 0
+            last_heartbeat_time = 0 # request immediate heartbeat
             state = State.RESULT_UPLOAD
         elif is_run_abort:
             container.remove(force=True)
@@ -499,6 +509,7 @@ while True:
             container = None
             run_result = None
             sleep_interval = 0
+            last_heartbeat_time = 0 # request immediate heartbeat
             state = State.IDLE
 
     elif state == State.RESULT_UPLOAD:
