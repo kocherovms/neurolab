@@ -433,7 +433,7 @@ while True:
                     LOG(f'Got abort request for launch "{abort_launch_id}"')
                     s3.delete_object(Bucket=args.s3_bucket_name, Key=key)
                     is_run_abort = is_run_abort or abort_launch_id == launch_id
-            except botocore.exceptions.BotoCoreError as e:
+            except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
                 LOG.warn(f'Failed to get abort requests: {str(e)}')
     
         if is_run_over:
