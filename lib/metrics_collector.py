@@ -622,7 +622,7 @@ class S3SummaryCollector:
         for retry_number in range(retries_count):
             try:
                 return method(*args, **kwargs)
-            except botocore.exceptions.BotoCoreError as e:
+            except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
                 retry_interval = 2 ** retry_number
                 Logging.get().error(f'Failed to self.s3.{method_name}: {str(e)}. Retrying in {retry_interval} seconds')
                 time.sleep(retry_interval)
@@ -635,7 +635,7 @@ class S3SummaryCollector:
         for retry_number in range(retries_count):
             try:
                 return foo()
-            except botocore.exceptions.BotoCoreError as e:
+            except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
                 retry_interval = 2 ** retry_number
                 Logging.get().error(f'Failed to {foo_desc}: {str(e)}. Retrying in {retry_interval} seconds')
                 time.sleep(retry_interval)
