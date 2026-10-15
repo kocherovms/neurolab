@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import logging
 import threading
 import random
+import pickle
 
 import boto3
 import botocore
@@ -480,6 +481,16 @@ while True:
                             )
                             LOG.error(metadata.error_message)
 
+                if launch.get('return_logs', False):
+                    response_dict = dict(
+                        result_file=response,
+                        logs=container.logs().decode('utf-8'),
+                    )
+                    LOG.error(f'Container logs captured: {len(response_dict['logs'])} bytes')
+                    response = io.BytesIO()
+                    pickle.dump(response_dict, response)
+                    response.seek(0)
+                    
             run_result = dict(
                 Key=f'{args.key_prefix}/complete_launches/{runner_name}/{launch_id}',
                 Bucket=args.s3_bucket_name, 
