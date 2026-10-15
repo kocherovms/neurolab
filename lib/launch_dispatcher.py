@@ -6,6 +6,8 @@ import time
 from enum import IntEnum, auto
 import dataclasses
 from dataclasses import dataclass
+import subprocess
+import tempfile
 
 import pika
 import boto3
@@ -18,6 +20,8 @@ RMQ_DEFAULT_CONNECTION_URL = 'amqp://guest:guest@rabbitmq:5672/%2F'
 RMQ_LAUNCH_REQUESTS_QUEUE_NAME = 'launch_requests'
 RMQ_RUNNERS_INFO_QUEUE_NAME = 'runners_info'
 RMQ_MAGIC_REPLY_QUEUE_NAME = 'amq.rabbitmq.reply-to'
+DOCKER_REGISTRY = os.environ.get('DOCKER_REGISTRY', 'cr.selcloud.ru/neurolab')
+SCRIPT_BASE_IMAGE = os.environ.get('SCRIPT_BASE_IMAGE', 'cr.selcloud.ru/neurolab/neurolab_source:latest')
 
 class LaunchRequest:
     def __init__(self, rmq_connection_url):
@@ -410,22 +414,84 @@ class LaunchDispatcher:
         
         self.rmq_connection.call_later(delay=1, callback=self.on_idle)
 
+    class BadLaunchRequest(Exception):
+        pass
+    
     def on_launch_request(self, ch, method, properties, body):
         Logging.get().debug(f'on_launch_request: method={method}, properties={properties}, len(body)={len(body)}')
         reply_to = properties.reply_to
-
         request = json.loads(body.decode())
-        launch = Launch(
-            id=f'{os.path.basename(request['launch_image'])}_{time.time():.3f}',
-            reply_to=reply_to,
-            status=LaunchStatus.PENDING,
-            request=request,
-        )
-        assert not launch.id in self.launches, launch.id
-        self.launches[launch.id] = launch
-        Logging.get().info(f'New launch requested: {dataclasses.asdict(launch)}')
-        self.save_launches()
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        
+        try:
+            if 'script_name' in request:
+                launch_image = os.path.join(DOCKER_REGISTRY, f'{request['script_name']}:{request.get('script_version', 'latest')}')
+                script_code = request.get('script_code', '')
+                
+                if not script_code:
+                    raise self.BadLaunchRequest('Script code is missing in request')
+    
+                try:
+                    with tempfile.TemporaryDirectory() as build_dir:
+                        with tempfile.NamedTemporaryFile(mode='wt', dir=build_dir, suffix='.Dockerfile') as dockerfile:
+                            with open(os.path.join(build_dir, 'script.py'), 'w') as f:
+                                f.write(script_code)
+
+                            dockerfile_content = f'''
+FROM {SCRIPT_BASE_IMAGE}
+WORKDIR /script
+COPY script.py .
+ENTRYPOINT ["python3", "script.py"]
+'''
+                            with open(dockerfile.name, 'w') as f:
+                                f.write(dockerfile_content)
+                            
+                            subprocess.run(
+                                ['docker', 'buildx', 'build', '-f', dockerfile.name, '-t', launch_image, build_dir, '--no-cache'],
+                                text=True,                # Handles input/output as strings instead of bytes
+                                capture_output=False,     # Streams Docker's build output directly to your terminal
+                                check=True                # Raises an exception if the command fails
+                            )
+                            Logging.get().info(f'Docker image "{launch_image}" built')
+
+                            subprocess.run(
+                                ['docker', 'push', launch_image],
+                                text=True,                # Handles input/output as strings instead of bytes
+                                capture_output=False,     # Streams Docker's build output directly to your terminal
+                                check=True                # Raises an exception if the command fails
+                            )
+                            Logging.get().info(f'Docker image "{launch_image}" pushed')
+    
+                            request['launch_image'] = launch_image
+                            request.pop('script_name', None)
+                            request.pop('script_version', None)
+                            request.pop('script_code', None)
+                except Exception as e:
+                    raise self.BadLaunchRequest(f'Failed to build and push docker image: {e}')
+    
+            if not 'launch_image' in request:
+                raise self.BadLaunchRequest(f'"launch_image" is missing in request')
+                
+            launch = Launch(
+                id=f'{os.path.basename(request['launch_image'])}_{time.time():.3f}',
+                reply_to=reply_to,
+                status=LaunchStatus.PENDING,
+                request=request,
+            )
+            assert not launch.id in self.launches, launch.id
+            self.launches[launch.id] = launch
+            Logging.get().info(f'New launch requested: {dataclasses.asdict(launch)}')
+            self.save_launches()
+        except self.BadLaunchRequest as e:
+            Logging.get().error(f'Failed to process launch request: {e}')
+            self.rmq_channel.basic_publish(
+                exchange='', 
+                routing_key=reply_to, 
+                body=json.dumps(dict(error_message=str(e))),
+                properties=properties,
+            )
+            Logging.get().info(f'Launch results sent to {reply_to}')
+        finally:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def on_runners_info(self, ch, method, properties, body):
         Logging.get().debug(f'on_runners_info: method={method}, properties={properties}, len(body)={len(body)}')
