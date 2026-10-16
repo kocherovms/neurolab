@@ -181,6 +181,9 @@ class LaunchDispatcher:
         self.rmq_channel.start_consuming()
 
     def on_idle(self):
+        # Code below is poor for consistency: external calls to s3 may fall leaving internal structures disordered.
+        # Better approach is to use some transactional storage for internal structures. But this requires refactoring which is 
+        # worth only if such failures will hurt frequently
         # Logging.get().debug(f'on_idle')
         my_time = time.time()
         is_launches_dirty = False
@@ -312,7 +315,14 @@ class LaunchDispatcher:
 
                 if len(concurrent_runners) > 1:
                     # We have multiple runners of the same launch!
-                    concurrent_runners.sort(key=lambda r: -r.launch_duration)
+                    # lu.coalesce is a workaround for a following bug: 
+                    # - no heartbeat from launch_runner A with running launch -> launch is moved to PENDING
+                    # - launch runner A with already running launch returns
+                    # - delete_s3_object_with_retries fails, leaving launch in PENDING but with assigned to launch_runner A
+                    # - launch is assigned to launch_runner B
+                    # - another heartbeat from launch_runner C is received
+                    # - we discover that there are two launches running on launch_runner A and B and settle here with two launch_runners where B has launch_duration=None
+                    concurrent_runners.sort(key=lambda r: -lu.coalesce(r.launch_duration, 0)) 
                     
                     for abort_runner in concurrent_runners[1:]: # filter out the most long running launch, send abort requests to all remaining
                         if abort_runner.abort_launch_id != launch.id:
@@ -407,10 +417,8 @@ class LaunchDispatcher:
     
             if is_launches_dirty:
                 self.save_launches()
-        except botocore.exceptions.ClientError as e:
-            Logging.get().error(f'Connectivity error: {str(e)}')
-        except botocore.exceptions.ConnectionError as e:
-            Logging.get().error(f'Connectivity error: {str(e)}')
+        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
+            Logging.get().error(f'Failed to process idle activities: {str(e)}')
         
         self.rmq_connection.call_later(delay=1, callback=self.on_idle)
 
@@ -527,7 +535,7 @@ ENTRYPOINT ["python3", "script.py"]
             try:
                 self.s3.delete_object(Bucket=self.s3_bucket_name, Key=key)
                 return
-            except botocore.exceptions.ClientError as e:
+            except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
                 if e.response.get('Error', {}).get('Code', {}) == 'OperationAborted':
                     Logging.get().warn(f'Failed to delete_object "{key}": OperationAborted. Retrying in {delay} seconds')
                     time.sleep(delay)
