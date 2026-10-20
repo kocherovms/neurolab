@@ -13,5 +13,6 @@ RUN pip install --break-system-packages --no-cache-dir papermill
 RUN pip install --break-system-packages --no-cache-dir scipy
 RUN pip install --break-system-packages --no-cache-dir boto3
 RUN pip install --break-system-packages --no-cache-dir piq # SSIM metric
-RUN pip install --break-system-packages --no-cache-dir ale_py==0.12.0+neurolab7 --index-url=http://nexus:8081/repository/neurolab-pypi/simple --trusted-host=nexus
+RUN pip install --break-system-packages --no-cache-dir peft 
+RUN pip install --break-system-packages --no-cache-dir ale_py==0.12.0+neurolab8 --index-url=http://nexus:8081/repository/neurolab-pypi/simple --trusted-host=nexus
 CMD ["/bin/bash"]
