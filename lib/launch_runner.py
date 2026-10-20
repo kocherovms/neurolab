@@ -247,18 +247,25 @@ while True:
 
             for obj in response.get('Contents', []):
                 key = obj['Key']
-                launch_id = os.path.basename(key)
-                launch_start_time = time.time()
-                LOG(f'Processing new launch "{launch_id}"')
-
-                s3_context = 'get_object'
-                obj = s3.get_object(Bucket=args.s3_bucket_name, Key=key)
                 
-                with io.BytesIO(obj['Body'].read()) as b:
-                    launch = json.load(b)
-
-                s3_context = 'delete_object'
-                s3.delete_object(Bucket=args.s3_bucket_name, Key=key)
+                try:
+                    launch_id = os.path.basename(key)
+                    launch_start_time = time.time()
+                    LOG(f'Processing new launch "{launch_id}"')
+    
+                    s3_context = 'get_object'
+                    obj = s3.get_object(Bucket=args.s3_bucket_name, Key=key)
+                    
+                    with io.BytesIO(obj['Body'].read()) as b:
+                        launch = json.load(b)
+    
+                    s3_context = 'delete_object'
+                    s3.delete_object(Bucket=args.s3_bucket_name, Key=key)
+                except:
+                    launch_id = None
+                    launch = None
+                    launch_start_time = None
+                    raise
     
                 pull_result = ResultMetadata(is_ok=False)
                 pull_finished_event = threading.Event()
