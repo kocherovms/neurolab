@@ -9,17 +9,17 @@ RUN chown 1000 /neurolab
 USER 1000
 RUN --mount=type=secret,id=neurolab_deploy_key,target=/tmp/neurolab_deploy_key,uid=1000 \ 
     export GIT_SSH_COMMAND="ssh -i /tmp/neurolab_deploy_key -o IdentitiesOnly=yes" && \
-    git clone git@github.com:kocherovms/neurolab.git /neurolab
+    git clone --progress git@github.com:kocherovms/neurolab.git /neurolab
 
 WORKDIR /neurolab
 RUN --mount=type=secret,id=neurolab_deploy_key,target=/tmp/neurolab_deploy_key,uid=1000 \ 
     export GIT_SSH_COMMAND="ssh -i /tmp/neurolab_deploy_key -o IdentitiesOnly=yes" && \
     git config --global url."git@github.com:".insteadOf "https://github.com/" && \
-    git submodule update --init --recursive
+    git submodule update --init --recursive --progress
 ARG CACHEBUST=1
 RUN --mount=type=secret,id=neurolab_deploy_key,target=/tmp/neurolab_deploy_key,uid=1000 \ 
     export GIT_SSH_COMMAND="ssh -i /tmp/neurolab_deploy_key -o IdentitiesOnly=yes" && \
-    git pull --rebase
+    git pull --rebase --progress
 
 # Command scripts
 USER 0
