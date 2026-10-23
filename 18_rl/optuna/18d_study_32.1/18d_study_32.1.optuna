@@ -1,0 +1,15 @@
+{"op_code":0,"worker_id":"ecbd1ca3-c6b9-499a-9961-4d11d73d5a63-137256818329088","study_name":"18d_study_32.1","directions":[2]}
+{"op_code":2,"worker_id":"ecbd1ca3-c6b9-499a-9961-4d11d73d5a63-137256818329088","study_id":0,"user_attr":{"STUDY_SERIAL":"32.1"}}
+{"op_code":4,"worker_id":"2c8d71d9-ae39-4b64-a2fa-a5e75d882828-139774958241280","study_id":0,"datetime_start":"2026-10-23T09:56:33.517785"}
+{"op_code":8,"worker_id":"2c8d71d9-ae39-4b64-a2fa-a5e75d882828-139774958241280","trial_id":0,"user_attr":{"MODEL_VERSION":"3"}}
+{"op_code":4,"worker_id":"17376c63-8380-4741-93b0-4e1754ebc113-139791851247104","study_id":0,"datetime_start":"2026-10-23T09:57:04.501661"}
+{"op_code":8,"worker_id":"17376c63-8380-4741-93b0-4e1754ebc113-139791851247104","trial_id":1,"user_attr":{"MODEL_VERSION":"4"}}
+{"op_code":4,"worker_id":"473d212c-d59a-46ff-b337-eb62e3d7500c-124639281350144","study_id":0,"datetime_start":"2026-10-23T09:57:36.141862"}
+{"op_code":8,"worker_id":"473d212c-d59a-46ff-b337-eb62e3d7500c-124639281350144","trial_id":2,"user_attr":{"MODEL_VERSION":"5"}}
+{"op_code":4,"worker_id":"9db15443-7863-4a29-8c2d-352dacaf0a45-137748964496896","study_id":0,"datetime_start":"2026-10-23T09:58:08.711973"}
+{"op_code":8,"worker_id":"9db15443-7863-4a29-8c2d-352dacaf0a45-137748964496896","trial_id":3,"user_attr":{"MODEL_VERSION":"6"}}
+{"op_code":6,"worker_id":"2c8d71d9-ae39-4b64-a2fa-a5e75d882828-139774958241280","trial_id":0,"state":1,"values":[0.9926084876060486],"datetime_complete":"2026-10-23T10:38:19.088791"}
+{"op_code":6,"worker_id":"473d212c-d59a-46ff-b337-eb62e3d7500c-124639281350144","trial_id":2,"state":1,"values":[0.9899305105209351],"datetime_complete":"2026-10-23T10:38:41.828933"}
+{"op_code":6,"worker_id":"17376c63-8380-4741-93b0-4e1754ebc113-139791851247104","trial_id":1,"state":1,"values":[0.9927952885627747],"datetime_complete":"2026-10-23T10:39:27.604224"}
+{"op_code":6,"worker_id":"9db15443-7863-4a29-8c2d-352dacaf0a45-137748964496896","trial_id":3,"state":1,"values":[0.9922842979431152],"datetime_complete":"2026-10-23T10:41:41.997536"}
+{"op_code":0,"worker_id":"92fafe11-9945-4fba-84ed-91267958fa2d-137256818329088","study_name":"18d_study_32.1","directions":[1]}
