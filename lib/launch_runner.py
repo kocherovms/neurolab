@@ -43,6 +43,7 @@ parser.add_argument('--container_name_suffix', type=str, default=None) # suffix 
 parser.add_argument('--max_failed_heartbeats_count', type=int, default=5) # how many heartbeats failures in a row must happen before give up
 parser.add_argument('--max_failed_pending_launch_gets_count', type=int, default=10) # how many failed attempts to get a pending launch in a row must happen before give up
 parser.add_argument('--max_failed_result_uploads_count', type=int, default=10) # how many failed attempts to upload result of a launch in a row must happen before give up
+parser.add_argument('--check_gpu', type=int, default=None) 
 
 args = parser.parse_args()
 env_vars = {}
@@ -112,7 +113,12 @@ def generate_word_triplet():
                 
     return triplet
 
-is_gpu_present = check_gpu_presence()
+if args.check_gpu is None:
+    LOG('Testing if there is GPU')
+    is_gpu_present = check_gpu_presence()
+else:
+    is_gpu_present = bool(args.check_gpu)
+
 LOG(f'{is_gpu_present=}')
 
 s3_session = boto3.Session()

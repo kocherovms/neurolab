@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-docker build -f launch_runner.Dockerfile -t launch_runner:latest -t cr.selcloud.ru/neurolab/launch_runner:latest -t develorium/launch_runner:latest ..
+docker build -f launch_runner.Dockerfile -t launch_runner:latest -t cr.selcloud.ru/neurolab/launch_runner:latest -t develorium/launch_runner:latest --network=host ..
 
 if [ "$HAS_OPTIONS" = false ]; then
     [[ -f .docker_push ]] && docker push cr.selcloud.ru/neurolab/launch_runner:latest
