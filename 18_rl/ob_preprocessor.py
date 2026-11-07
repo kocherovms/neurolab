@@ -2,6 +2,8 @@ import torch
 import torchvision.transforms.functional as VF
 
 class ObPreprocessor:
+    ALE_INPUT_OB_SHAPE = (210, 160, 3)
+    
     def __init__(self, ob_shape, cast_to_float=False):
         self.ob_shape = ob_shape
         self.cast_to_float = cast_to_float
@@ -25,7 +27,7 @@ class ObPreprocessor:
         obs_shape = obs.shape
         obs = obs.view(-1, *obs_shape[-3:])
 
-        if obs.shape[-3:] == (210, 160, 3):
+        if obs.shape[-3:] == ObPreprocessor.ALE_INPUT_OB_SHAPE:
             # Default interleaved layout from ALE
             obs = obs.permute(0, 3, 1, 2) # move color channel to the front (switch interleaved->planar format)
         elif obs.shape[-3:] == (3, 210, 160):
